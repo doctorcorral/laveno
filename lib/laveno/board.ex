@@ -38,8 +38,12 @@ defmodule Laveno.Board do
     :ok
   end
 
-@doc """
+  @doc """
   Get the piece on a given square
+  ## Parameters
+
+  - board: %Laveno.Board{}
+  - square: String representing a square name in algebraic notation
 
   ## Examples
 
@@ -53,15 +57,13 @@ defmodule Laveno.Board do
       ) do
     c = column - @offset_column
     r = row - @offset_row
-    offset = 64 - 8 * (r + 1) + 8 - c - 1
+    offset = 64 - 8 * r - c - 1 
     mask = <<1 <<< offset::size(64)>> |> :binary.decode_unsigned()
-   
+
     piece =
       Enum.find(
         @pieces_set,
-        fn k ->
-          (bb[k] |> :binary.decode_unsigned() &&& mask) != 0
-        end
+        &((bb[&1] |> :binary.decode_unsigned() &&& mask) != 0)
       )
 
     piece
