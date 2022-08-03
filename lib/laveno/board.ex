@@ -114,4 +114,17 @@ defmodule Laveno.Board do
     |> Enum.join("")
     |> IO.puts()
   end
+
+  def piece_atom_to_unicode(:P), do: "♙"
+  def piece_atom_to_unicode(:p), do: "♟"
+  def piece_atom_to_unicode(:K), do: "♔"
+  def piece_atom_to_unicode(:k), do: "♚"
+  def piece_atom_to_unicode(:Q), do: "♕"
+  def piece_atom_to_unicode(:q), do: "♛"
+  def piece_atom_to_unicode(:N), do: "♘"
+  def piece_atom_to_unicode(:n), do: "♞"
+  def piece_atom_to_unicode(:B), do: "♗"
+  def piece_atom_to_unicode(:b), do: "♝"
+  def piece_atom_to_unicode(:R), do: "♖"
+  def piece_atom_to_unicode(:r), do: "♜"
 end
