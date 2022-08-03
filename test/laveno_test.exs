@@ -49,7 +49,12 @@ defmodule LavenoTest do
   end
 
   test "there is a ♙ on c2" do
-    assert Board.new() |> Board.which_piece?("c3") == :P
+    assert Board.new() |> Board.which_piece?("c2") == :P
   end
 
+  test "printing board on starting position" do
+    b = Board.new()
+    Board.print_board( )
+    assert b |> Board.which_piece?("c2") == :P
+  end
 end
