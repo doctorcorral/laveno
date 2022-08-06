@@ -26,20 +26,21 @@ defmodule Laveno.Board.Utils do
   def moves(:N, square_offset), do: moves(:knight, square_offset)
   def moves(:n, square_offset), do: moves(:knight, square_offset)
 
-
   def moves(:knight, square_offset) do
     moves_list_binaries = [
-      <<(1 <<< (square_offset + 8 + 2))::size(64)>>,
-      <<(1 <<< (square_offset + 8 - 2))::size(64)>>,
-      <<(1 <<< (square_offset - 8 + 2))::size(64)>>,
-      <<(1 <<< (square_offset - 8 - 2))::size(64)>>,
-      <<(1 <<< (square_offset + 16 + 1))::size(64)>>,
-      <<(1 <<< (square_offset + 16 - 1))::size(64)>>,
-      <<(1 <<< (square_offset - 16 + 1))::size(64)>>,
-      <<(1 <<< (square_offset - 16 - 1))::size(64)>>,
+      <<1 <<< (square_offset + 8 + 2)::size(64)>>,
+      <<1 <<< (square_offset + 8 - 2)::size(64)>>,
+      <<1 <<< (square_offset - 8 + 2)::size(64)>>,
+      <<1 <<< (square_offset - 8 - 2)::size(64)>>,
+      <<1 <<< (square_offset + 16 + 1)::size(64)>>,
+      <<1 <<< (square_offset + 16 - 1)::size(64)>>,
+      <<1 <<< (square_offset - 16 + 1)::size(64)>>,
+      <<1 <<< (square_offset - 16 - 1)::size(64)>>
     ]
-    Enum.reduce(moves_list_binaries, <<0::size(64)>> |> :binary.decode_unsigned(),
-    fn m, acc -> acc ||| ( m |> :binary.decode_unsigned() ) end)
+
+    Enum.reduce(moves_list_binaries, <<0::size(64)>> |> :binary.decode_unsigned(), fn m, acc ->
+      acc ||| m |> :binary.decode_unsigned()
+    end)
   end
 
   def which_piece?(
@@ -56,7 +57,6 @@ defmodule Laveno.Board.Utils do
         board = %{bb: bb},
         offset_to_square
       ) do
-
     mask = <<1 <<< offset_to_square::size(64)>> |> :binary.decode_unsigned()
 
     piece =
@@ -68,8 +68,9 @@ defmodule Laveno.Board.Utils do
     piece
   end
 
-  def valid_move?(board,
-                  square = <<c1::size(8), r1::size(8), c2::size(8), r2::size(8)>>
+  def valid_move?(
+        board,
+        move = <<c1::size(8), r1::size(8), c2::size(8), r2::size(8)>>
       ) do
     c_from = c1 - @offset_column
     r_from = r1 - @offset_row
@@ -83,13 +84,11 @@ defmodule Laveno.Board.Utils do
   def valid_move?(board, offset_from, offset_to) do
     piece = which_piece?(board, offset_from)
     moves = moves(piece, offset_from)
-    offset_to_mask = (<<1 <<< offset_to::size(64)>> |> :binary.decode_unsigned())
-    IO.inspect(piece)
-    IO.inspect(offset_to_mask)
-    case (moves &&& <<1 <<< offset_to::size(64)>> |> :binary.decode_unsigned()) != 0 do
+    offset_to_mask = <<1 <<< offset_to::size(64)>> |> :binary.decode_unsigned()
+
+    case (moves &&& offset_to_mask) != 0 do
       true -> true
       _ -> false
     end
-
   end
 end
