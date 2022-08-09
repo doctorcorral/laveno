@@ -2,6 +2,41 @@ defmodule Laveno.Board.Utils do
   use Bitwise
   require Logger
 
+  @typedoc """
+  This is the main data structure for piece position
+  and square propery representation.
+
+  It is a bitstring (a binary with length divisible by 8).
+  Each of the 64 bits represent any squarewise property,
+  like the presence of a piece, or the squares considered -central squares-
+
+  For example, the following bitboatd represents the position of both withe bishops (♗)
+  <<36, 0, 0, 0, 0, 0, 0, 0>>.
+  Each of the 8 numbers are for each row, first row (36) is for the
+  bits 00100100 ~ 36
+  """
+  @type bitboard() :: <<_::64>>
+
+  @typedoc """
+  This is the unsigned integer representation of a bitboard
+
+  2594073385365405696
+  """
+  @type bitboard_int() :: non_neg_integer()
+
+  @typedoc """
+  Square name. e.g. "b4", "g7" ...
+  """
+  @type square_algebraic_notation() :: <<_::16>>
+
+  # "a1" -> 0, "e1" -> 4, "e2" -> 8, "h8" -> 64
+  @type square_offset_integer() :: integer()
+
+  @type piece_atom() :: :P | :p | :N | :n | :B | :b | :K | :k | :Q | :q | :R | :r
+
+  # "f2f4"
+  @type move() :: <<_::32>>
+
   @offset_row 49
   @offset_column 97
   @pieces_set [:P, :p, :N, :n, :B, :b, :K, :k, :Q, :q, :R, :r]
@@ -43,13 +78,26 @@ defmodule Laveno.Board.Utils do
     end)
   end
 
+  @spec which_piece?(map(), square_algebraic_notation()) :: piece_atom()
+  @spec which_piece?(map(), square_offset_integer()) :: piece_atom()
+  @doc """
+  Determine which piece is on a given square
+  ## Parameters
+
+  - board: %Laveno.Board{}
+  - square: String representing a square name in algebraic notation
+
+  ## Examples
+
+      iex> Laveno.Board.new() |> Laveno.Board.Utils.which_piece?("d8")
+      :q
+
+  """
   def which_piece?(
         board = %{bb: bb},
         square = <<column::size(8), row::size(8)>>
       ) do
-    c = column - @offset_column
-    r = row - @offset_row
-    offset = 64 - 8 * r - c - 1
+    {r, c, offset} = rco(row, column)
     which_piece?(board, offset)
   end
 
@@ -57,27 +105,23 @@ defmodule Laveno.Board.Utils do
         board = %{bb: bb},
         offset_to_square
       ) do
-    mask = <<1 <<< offset_to_square::size(64)>> |> :binary.decode_unsigned()
+    mask =
+      <<1 <<< offset_to_square::size(64)>>
+      |> :binary.decode_unsigned()
 
-    piece =
-      Enum.find(
-        @pieces_set,
-        &((bb[&1] |> :binary.decode_unsigned() &&& mask) != 0)
-      )
-
-    piece
+    Enum.find(
+      @pieces_set,
+      &((bb[&1] |> :binary.decode_unsigned() &&& mask) != 0)
+    )
   end
 
   def valid_move?(
         board,
         move = <<c1::size(8), r1::size(8), c2::size(8), r2::size(8)>>
       ) do
-    c_from = c1 - @offset_column
-    r_from = r1 - @offset_row
-    c_to = c2 - @offset_column
-    r_to = r2 - @offset_row
-    offset_from = 64 - 8 * r_from - c_from - 1
-    offset_to = 64 - 8 * r_to - c_to - 1
+    {r_from, c_from, offset_from} = rco(r1, c1)
+    {r_to, c_to, offset_to} = rco(r2, c2)
+
     valid_move?(board, offset_from, offset_to)
   end
 
@@ -91,4 +135,25 @@ defmodule Laveno.Board.Utils do
       _ -> false
     end
   end
+
+  defp rco(row, column) do
+    c = column - @offset_column
+    r = row - @offset_row
+    offset = 64 - 8 * r - c - 1
+
+    {r, c, offset}
+  end
+
+  def piece_atom_to_unicode(:P), do: "♙"
+  def piece_atom_to_unicode(:p), do: "♟"
+  def piece_atom_to_unicode(:K), do: "♔"
+  def piece_atom_to_unicode(:k), do: "♚"
+  def piece_atom_to_unicode(:Q), do: "♕"
+  def piece_atom_to_unicode(:q), do: "♛"
+  def piece_atom_to_unicode(:N), do: "♘"
+  def piece_atom_to_unicode(:n), do: "♞"
+  def piece_atom_to_unicode(:B), do: "♗"
+  def piece_atom_to_unicode(:b), do: "♝"
+  def piece_atom_to_unicode(:R), do: "♖"
+  def piece_atom_to_unicode(:r), do: "♜"
 end

@@ -24,26 +24,10 @@ defmodule Laveno.Board do
         board = %__MODULE__{bb: bb},
         square = <<c1::size(8), r1::size(8), c2::size(8), r2::size(8)>>
       ) do
-
     board
 
     {:ok, board}
   end
-
-  @doc """
-  Determine which piece is on a given square
-  ## Parameters
-
-  - board: %Laveno.Board{}
-  - square: String representing a square name in algebraic notation
-
-  ## Examples
-
-      iex> Board.new() |> Board.which_piece?("d8")
-      :q
-
-  """
-
 
   def print_rank(rank_num) do
     offset = rem(rank_num, 2)
@@ -91,16 +75,4 @@ defmodule Laveno.Board do
     |> IO.puts()
   end
 
-  def piece_atom_to_unicode(:P), do: "♙"
-  def piece_atom_to_unicode(:p), do: "♟"
-  def piece_atom_to_unicode(:K), do: "♔"
-  def piece_atom_to_unicode(:k), do: "♚"
-  def piece_atom_to_unicode(:Q), do: "♕"
-  def piece_atom_to_unicode(:q), do: "♛"
-  def piece_atom_to_unicode(:N), do: "♘"
-  def piece_atom_to_unicode(:n), do: "♞"
-  def piece_atom_to_unicode(:B), do: "♗"
-  def piece_atom_to_unicode(:b), do: "♝"
-  def piece_atom_to_unicode(:R), do: "♖"
-  def piece_atom_to_unicode(:r), do: "♜"
-end
+  end
