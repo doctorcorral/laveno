@@ -53,40 +53,63 @@ defmodule Laveno.Board.Utils do
 
   def initial_position_binary() do
     %{
-      P: <<0::(8), 255::(8), 0::(48)>>,
-      p: <<0::(48), 255::(8), 0::(8)>>,
-      N: <<0::(1), 1::(1), 0::(4), 1::(1), 0::(57)>>,
-      n: <<0::(57), 1::(1), 0::(4), 1::(1), 0::(1)>>,
-      B: <<0::(2), 1::(1), 0::(2), 1::(1), 0::(58)>>,
-      b: <<0::(58), 1::(1), 0::(2), 1::(1), 0::(2)>>,
-      Q: <<0::(3), 1::(1), 0::(60)>>,
-      q: <<0::(59), 1::(1), 0::(4)>>,
-      K: <<0::(4), 1::(1), 0::(59)>>,
-      k: <<0::(60), 1::(1), 0::(3)>>,
-      R: <<1::(1), 0::(6), 1::(1), 0::(56)>>,
-      r: <<0::(56), 1::(1), 0::(6), 1::(1)>>
+      P: <<0::8, 255::8, 0::48>>,
+      p: <<0::48, 255::8, 0::8>>,
+      N: <<0::1, 1::1, 0::4, 1::1, 0::57>>,
+      n: <<0::57, 1::1, 0::4, 1::1, 0::1>>,
+      B: <<0::2, 1::1, 0::2, 1::1, 0::58>>,
+      b: <<0::58, 1::1, 0::2, 1::1, 0::2>>,
+      Q: <<0::3, 1::1, 0::60>>,
+      q: <<0::59, 1::1, 0::4>>,
+      K: <<0::4, 1::1, 0::59>>,
+      k: <<0::60, 1::1, 0::3>>,
+      R: <<1::1, 0::6, 1::1, 0::56>>,
+      r: <<0::56, 1::1, 0::6, 1::1>>
     }
   end
 
   @spec moves(piece_atom(), square_offset_integer()) :: bitboard_int()
   @spec moves(piece_name_atom(), square_offset_integer()) :: bitboard_int()
 
+  @doc """
+  A bitboard map for possible piece moves
+  """
   def moves(:N, square_offset), do: moves(:knight, square_offset)
   def moves(:n, square_offset), do: moves(:knight, square_offset)
 
+  def moves(:K, square_offset), do: moves(:king, square_offset)
+  def moves(:k, square_offset), do: moves(:king, square_offset)
+
   def moves(:knight, square_offset) do
     moves_list_binaries = [
-      <<1 <<< (square_offset + 8 + 2)::(64)>>,
-      <<1 <<< (square_offset + 8 - 2)::(64)>>,
-      <<1 <<< (square_offset - 8 + 2)::(64)>>,
-      <<1 <<< (square_offset - 8 - 2)::(64)>>,
-      <<1 <<< (square_offset + 16 + 1)::(64)>>,
-      <<1 <<< (square_offset + 16 - 1)::(64)>>,
-      <<1 <<< (square_offset - 16 + 1)::(64)>>,
-      <<1 <<< (square_offset - 16 - 1)::(64)>>
+      <<1 <<< (square_offset + 8 + 2)::64>>,
+      <<1 <<< (square_offset + 8 - 2)::64>>,
+      <<1 <<< (square_offset - 8 + 2)::64>>,
+      <<1 <<< (square_offset - 8 - 2)::64>>,
+      <<1 <<< (square_offset + 16 + 1)::64>>,
+      <<1 <<< (square_offset + 16 - 1)::64>>,
+      <<1 <<< (square_offset - 16 + 1)::64>>,
+      <<1 <<< (square_offset - 16 - 1)::64>>
     ]
 
-    Enum.reduce(moves_list_binaries, <<0::(64)>> |> :binary.decode_unsigned(), fn m, acc ->
+    Enum.reduce(moves_list_binaries, <<0::64>> |> :binary.decode_unsigned(), fn m, acc ->
+      acc ||| m |> :binary.decode_unsigned()
+    end)
+  end
+
+  def moves(:king, square_offset) do
+    moves_list_binaries = [
+      <<1 <<< (square_offset + 1)::64>>,
+      <<1 <<< (square_offset - 1)::64>>,
+      <<1 <<< (square_offset - 8 + 1)::64>>,
+      <<1 <<< (square_offset - 8)::64>>,
+      <<1 <<< (square_offset - 8 - 1)::64>>,
+      <<1 <<< (square_offset + 8 + 1)::64>>,
+      <<1 <<< (square_offset + 8)::64>>,
+      <<1 <<< (square_offset + 8 - 1)::64>>
+    ]
+
+    Enum.reduce(moves_list_binaries, <<0::64>> |> :binary.decode_unsigned(), fn m, acc ->
       acc ||| m |> :binary.decode_unsigned()
     end)
   end
