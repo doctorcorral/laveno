@@ -12,8 +12,8 @@ defmodule Laveno.Board.Utils do
 
   For example, the following bitboatd represents the position of both withe bishops (♗)
   <<36, 0, 0, 0, 0, 0, 0, 0>>.
-  Each of the 8 numbers are for each row, first row (36) is for the
-  bits 00100100 ~ 36
+  Each of the 8 numbers are for each row, first row "a" has a value of 36
+  which is given by the bits 00100100 ~ 36
   """
   @type bitboard() :: <<_::64>>
 
@@ -50,18 +50,18 @@ defmodule Laveno.Board.Utils do
 
   def initial_position_binary() do
     %{
-      P: <<0::size(8), 255::size(8), 0::size(48)>>,
-      p: <<0::size(48), 255::size(8), 0::size(8)>>,
-      N: <<0::size(1), 1::size(1), 0::size(4), 1::size(1), 0::size(57)>>,
-      n: <<0::size(57), 1::size(1), 0::size(4), 1::size(1), 0::size(1)>>,
-      B: <<0::size(2), 1::size(1), 0::size(2), 1::size(1), 0::size(58)>>,
-      b: <<0::size(58), 1::size(1), 0::size(2), 1::size(1), 0::size(2)>>,
-      Q: <<0::size(3), 1::size(1), 0::size(60)>>,
-      q: <<0::size(59), 1::size(1), 0::size(4)>>,
-      K: <<0::size(4), 1::size(1), 0::size(59)>>,
-      k: <<0::size(60), 1::size(1), 0::size(3)>>,
-      R: <<1::size(1), 0::size(6), 1::size(1), 0::size(56)>>,
-      r: <<0::size(56), 1::size(1), 0::size(6), 1::size(1)>>
+      P: <<0::(8), 255::(8), 0::(48)>>,
+      p: <<0::(48), 255::(8), 0::(8)>>,
+      N: <<0::(1), 1::(1), 0::(4), 1::(1), 0::(57)>>,
+      n: <<0::(57), 1::(1), 0::(4), 1::(1), 0::(1)>>,
+      B: <<0::(2), 1::(1), 0::(2), 1::(1), 0::(58)>>,
+      b: <<0::(58), 1::(1), 0::(2), 1::(1), 0::(2)>>,
+      Q: <<0::(3), 1::(1), 0::(60)>>,
+      q: <<0::(59), 1::(1), 0::(4)>>,
+      K: <<0::(4), 1::(1), 0::(59)>>,
+      k: <<0::(60), 1::(1), 0::(3)>>,
+      R: <<1::(1), 0::(6), 1::(1), 0::(56)>>,
+      r: <<0::(56), 1::(1), 0::(6), 1::(1)>>
     }
   end
 
@@ -73,17 +73,17 @@ defmodule Laveno.Board.Utils do
 
   def moves(:knight, square_offset) do
     moves_list_binaries = [
-      <<1 <<< (square_offset + 8 + 2)::size(64)>>,
-      <<1 <<< (square_offset + 8 - 2)::size(64)>>,
-      <<1 <<< (square_offset - 8 + 2)::size(64)>>,
-      <<1 <<< (square_offset - 8 - 2)::size(64)>>,
-      <<1 <<< (square_offset + 16 + 1)::size(64)>>,
-      <<1 <<< (square_offset + 16 - 1)::size(64)>>,
-      <<1 <<< (square_offset - 16 + 1)::size(64)>>,
-      <<1 <<< (square_offset - 16 - 1)::size(64)>>
+      <<1 <<< (square_offset + 8 + 2)::(64)>>,
+      <<1 <<< (square_offset + 8 - 2)::(64)>>,
+      <<1 <<< (square_offset - 8 + 2)::(64)>>,
+      <<1 <<< (square_offset - 8 - 2)::(64)>>,
+      <<1 <<< (square_offset + 16 + 1)::(64)>>,
+      <<1 <<< (square_offset + 16 - 1)::(64)>>,
+      <<1 <<< (square_offset - 16 + 1)::(64)>>,
+      <<1 <<< (square_offset - 16 - 1)::(64)>>
     ]
 
-    Enum.reduce(moves_list_binaries, <<0::size(64)>> |> :binary.decode_unsigned(), fn m, acc ->
+    Enum.reduce(moves_list_binaries, <<0::(64)>> |> :binary.decode_unsigned(), fn m, acc ->
       acc ||| m |> :binary.decode_unsigned()
     end)
   end
