@@ -1,6 +1,5 @@
 defmodule LavenoTest do
   use ExUnit.Case, async: true
-  doctest Laveno
   doctest Laveno.Board.Utils
 
   alias Laveno.Board
@@ -54,7 +53,9 @@ defmodule LavenoTest do
     test "there is a ♙ on c2" do
       assert Board.new() |> Utils.which_piece?("c2") == :P
     end
+  end
 
+  describe "piece movility :" do
     test "a ♘ can move from b1 to c3" do
       assert Board.new() |> Utils.valid_move?("b1c3") == true
     end
