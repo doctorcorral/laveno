@@ -41,7 +41,10 @@ defmodule Laveno.Board.Utils do
   @type piece_atom() :: :P | :p | :N | :n | :B | :b | :K | :k | :Q | :q | :R | :r
   @type piece_name_atom() :: :pawn | :knight | :queen | :bishop | :rook | :king
 
-  # "f2f4"
+  @typedoc """
+  Move in extended algebraic notation
+  (explicit origin and target squares), e.g. "f2f4"
+  """
   @type move() :: <<_::32>>
 
   @offset_row 49
