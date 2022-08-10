@@ -1,10 +1,6 @@
 defmodule Laveno do
   @moduledoc """
-  Documentation for `Laveno` chess engine.
+  Laveno ♜  chess engine.
   """
 
-  
-  def hello do
-    :laveno
-  end
 end
