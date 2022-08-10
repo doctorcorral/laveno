@@ -71,6 +71,22 @@ defmodule LavenoTest do
     test "a ♘ can move from g1 to h3" do
       assert Board.new() |> Utils.valid_move?("g1h3") == true
     end
+
+    test "the ♔ can move from e1 to f2" do
+      assert Board.new() |> Utils.valid_move?("e1f2") == true
+    end
+
+    test "the ♔ can move from e1 to d2" do
+      assert Board.new() |> Utils.valid_move?("e1d2") == true
+    end
+
+    test "the ♔ can move from e1 to d1" do
+      assert Board.new() |> Utils.valid_move?("e1d1") == true
+    end
+
+    test "the ♚ can move from e8 to f7" do
+      assert Board.new() |> Utils.valid_move?("e8f7") == true
+    end
   end
 
   test "printing board on starting position" do
