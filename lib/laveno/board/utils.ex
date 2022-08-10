@@ -6,7 +6,7 @@ defmodule Laveno.Board.Utils do
   This is the main data structure for piece position
   and square propery representation.
 
-  It is a bitstring (a binary with length divisible by 8).
+  It is a binary (a bitstring which length is divisible by 8).
   Each of the 64 bits represent any squarewise property,
   like the presence of a piece, or the squares considered -central squares-
 
@@ -18,21 +18,28 @@ defmodule Laveno.Board.Utils do
   @type bitboard() :: <<_::64>>
 
   @typedoc """
-  This is the unsigned integer representation of a bitboard
+  Unsigned integer representation of a bitboard
 
   2594073385365405696
   """
   @type bitboard_int() :: non_neg_integer()
 
   @typedoc """
-  Square name. e.g. "b4", "g7" ...
+  Square name.
+
+  e.g. "b4", "g7" ...
   """
   @type square_algebraic_notation() :: <<_::16>>
 
-  # "a1" -> 0, "e1" -> 4, "e2" -> 8, "h8" -> 64
+  @typedoc """
+  A square represented by its single square position in a bitboard
+
+  "a1" -> 0, "e1" -> 4, "e2" -> 8, "h8" -> 64
+  """
   @type square_offset_integer() :: integer()
 
   @type piece_atom() :: :P | :p | :N | :n | :B | :b | :K | :k | :Q | :q | :R | :r
+  @type piece_name_atom() :: :pawn | :knight | :queen | :bishop | :rook | :king
 
   # "f2f4"
   @type move() :: <<_::32>>
@@ -57,6 +64,9 @@ defmodule Laveno.Board.Utils do
       r: <<0::size(56), 1::size(1), 0::size(6), 1::size(1)>>
     }
   end
+
+  @spec moves(piece_atom(), square_offset_integer()) :: bitboard_int()
+  @spec moves(piece_name_atom(), square_offset_integer()) :: bitboard_int()
 
   def moves(:N, square_offset), do: moves(:knight, square_offset)
   def moves(:n, square_offset), do: moves(:knight, square_offset)
@@ -144,6 +154,7 @@ defmodule Laveno.Board.Utils do
     {r, c, offset}
   end
 
+  @spec piece_atom_to_unicode(atom()) :: binary()
   def piece_atom_to_unicode(:P), do: "♙"
   def piece_atom_to_unicode(:p), do: "♟"
   def piece_atom_to_unicode(:K), do: "♔"
