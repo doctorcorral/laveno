@@ -72,7 +72,7 @@ defmodule Laveno.Board.Utils do
   @spec moves(piece_name_atom(), square_offset_integer()) :: bitboard_int()
 
   @doc """
-  A bitboard map for possible piece moves
+  A bitboard mask for possible piece moves
   """
   def moves(:N, square_offset), do: moves(:knight, square_offset)
   def moves(:n, square_offset), do: moves(:knight, square_offset)
@@ -80,8 +80,11 @@ defmodule Laveno.Board.Utils do
   def moves(:K, square_offset), do: moves(:king, square_offset)
   def moves(:k, square_offset), do: moves(:king, square_offset)
 
+  def moves(:R, square_offset), do: moves(:rook, square_offset)
+  def moves(:r, square_offset), do: moves(:rook, square_offset)
+
   def moves(:knight, square_offset) do
-    moves_list_binaries = [
+    [
       <<1 <<< (square_offset + 8 + 2)::64>>,
       <<1 <<< (square_offset + 8 - 2)::64>>,
       <<1 <<< (square_offset - 8 + 2)::64>>,
@@ -91,14 +94,11 @@ defmodule Laveno.Board.Utils do
       <<1 <<< (square_offset - 16 + 1)::64>>,
       <<1 <<< (square_offset - 16 - 1)::64>>
     ]
-
-    Enum.reduce(moves_list_binaries, <<0::64>> |> :binary.decode_unsigned(), fn m, acc ->
-      acc ||| m |> :binary.decode_unsigned()
-    end)
+    |> aggregate_bitboards()
   end
 
   def moves(:king, square_offset) do
-    moves_list_binaries = [
+    [
       <<1 <<< (square_offset + 1)::64>>,
       <<1 <<< (square_offset - 1)::64>>,
       <<1 <<< (square_offset - 8 + 1)::64>>,
@@ -108,10 +108,21 @@ defmodule Laveno.Board.Utils do
       <<1 <<< (square_offset + 8)::64>>,
       <<1 <<< (square_offset + 8 - 1)::64>>
     ]
+    |> aggregate_bitboards()
+  end
 
-    Enum.reduce(moves_list_binaries, <<0::64>> |> :binary.decode_unsigned(), fn m, acc ->
-      acc ||| m |> :binary.decode_unsigned()
-    end)
+  def moves(:rook, square_offset) do
+    [
+      <<1 <<< (square_offset + 1)::64>>,
+      <<1 <<< (square_offset - 1)::64>>,
+      <<1 <<< (square_offset - 8 + 1)::64>>,
+      <<1 <<< (square_offset - 8)::64>>,
+      <<1 <<< (square_offset - 8 - 1)::64>>,
+      <<1 <<< (square_offset + 8 + 1)::64>>,
+      <<1 <<< (square_offset + 8)::64>>,
+      <<1 <<< (square_offset + 8 - 1)::64>>
+    ]
+    |> aggregate_bitboards()
   end
 
   @spec which_piece?(map(), square_algebraic_notation()) :: piece_atom()
@@ -178,6 +189,16 @@ defmodule Laveno.Board.Utils do
     offset = 64 - 8 * r - c - 1
 
     {r, c, offset}
+  end
+
+  def aggregate_bitboards(bitboards_list) do
+    Enum.reduce(
+      bitboards_list,
+      <<0::64>> |> :binary.decode_unsigned(),
+      fn bitboard, mask ->
+        mask ||| bitboard |> :binary.decode_unsigned()
+      end
+    )
   end
 
   @spec piece_atom_to_unicode(atom()) :: binary()
