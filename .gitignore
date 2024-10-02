@@ -1,0 +1,7 @@
+/_build
+/db
+/deps
+/cover
+/doc
+/priv/repo/migrations/*.exs
+/*.ez
