@@ -5,13 +5,19 @@ defmodule Laveno.MixProject do
     [
       app: :laveno,
       version: "0.1.0",
-      elixir: "~> 1.13",
+      elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       name: "l a v e n o  ♜",
       homepage_url: "https://laveno.one",
-      docs: [main: "l a v e n o ♟"]
+      docs: [main: "l a v e n o ♟"],
+      escript: escript(),
+      releases: releases()
     ]
+  end
+
+  defp escript do
+    [main_module: Laveno.UCI]
   end
 
   # Run "mix help compile.app" to learn about applications.
@@ -26,7 +32,23 @@ defmodule Laveno.MixProject do
   defp deps do
     [
       {:ex_doc, "~> 0.27", only: :dev, runtime: false},
-      {:dialyxir, "~> 1.0", only: [:dev], runtime: false}
+      {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
+      {:burrito, "~> 1.0"}
+    ]
+  end
+
+  def releases do
+    [
+      laveno_uci_app: [
+        steps: [:assemble, &Burrito.wrap/1],
+        burrito: [
+          targets: [
+            macos: [os: :darwin, cpu: :x86_64],
+            linux: [os: :linux, cpu: :x86_64],
+            windows: [os: :windows, cpu: :x86_64]
+          ]
+        ]
+      ]
     ]
   end
 end

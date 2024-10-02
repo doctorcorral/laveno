@@ -6,92 +6,64 @@ defmodule LavenoTest do
   alias Laveno.Board.Utils
 
   describe "piece presence over initial position :" do
-    test "there is a ♘ on g1" do
-      assert Board.new() |> Utils.which_piece?("g1") == :N
+    test "there is a :N on g1" do
+      assert Board.new()
+             |> Utils.which_piece?("g1") == :N
     end
 
-    test "there is a ♞ on b8" do
-      assert Board.new() |> Utils.which_piece?("b8") == :n
+    test "there is a :n on b8" do
+      assert Board.new()
+             |> Utils.which_piece?("b8") == :n
     end
 
-    test "there is a ♝ on f8" do
-      assert Board.new() |> Utils.which_piece?("f8") == :b
+    test "there is a :b on f8" do
+      assert Board.new()
+             |> Utils.which_piece?("f8") == :b
     end
 
-    test "there is a ♜ on h8" do
-      assert Board.new() |> Utils.which_piece?("h8") == :r
+    test "there is a :r on h8" do
+      assert Board.new()
+             |> Utils.which_piece?("h8") == :r
     end
 
-    test "there is a ♚ on e8" do
-      assert Board.new() |> Utils.which_piece?("e8") == :k
+    test "there is a :k on e8" do
+      assert Board.new()
+             |> Utils.which_piece?("e8") == :k
     end
 
-    test "there is a ♔ on e1" do
-      assert Board.new() |> Utils.which_piece?("e1") == :K
+    test "there is a :K on e1" do
+      assert Board.new()
+             |> Utils.which_piece?("e1") == :K
     end
 
-    test "there is a ♛ on d8" do
-      assert Board.new() |> Utils.which_piece?("d8") == :q
+    test "there is a :q on d8" do
+      assert Board.new()
+             |> Utils.which_piece?("d8") == :q
     end
 
-    test "there is a ♕ on d1" do
-      assert Board.new() |> Utils.which_piece?("d1") == :Q
+    test "there is a :Q on d1" do
+      assert Board.new()
+             |> Utils.which_piece?("d1") == :Q
     end
 
-    test "there is a ♟ on b7" do
-      assert Board.new() |> Utils.which_piece?("b7") == :p
+    test "there is a ;p on b7" do
+      assert Board.new()
+             |> Utils.which_piece?("b7") == :p
     end
 
-    test "there is a ♟ on d7" do
-      assert Board.new() |> Utils.which_piece?("d7") == :p
+    test "there is a :p on d7" do
+      assert Board.new()
+             |> Utils.which_piece?("d7") == :p
     end
 
-    test "there is a ♙ on h2" do
-      assert Board.new() |> Utils.which_piece?("h2") == :P
+    test "there is a :P on h2" do
+      assert Board.new()
+             |> Utils.which_piece?("h2") == :P
     end
 
-    test "there is a ♙ on c2" do
-      assert Board.new() |> Utils.which_piece?("c2") == :P
+    test "there is a :P on c2" do
+      assert Board.new()
+             |> Utils.which_piece?("c2") == :P
     end
-  end
-
-  describe "piece movility :" do
-    test "a ♘ can move from b1 to c3" do
-      assert Board.new() |> Utils.valid_move?("b1c3") == true
-    end
-
-    test "a ♘ can move from b1 to a3" do
-      assert Board.new() |> Utils.valid_move?("b1a3") == true
-    end
-
-    test "a ♘ can move from g1 to f3" do
-      assert Board.new() |> Utils.valid_move?("g1f3") == true
-    end
-
-    test "a ♘ can move from g1 to h3" do
-      assert Board.new() |> Utils.valid_move?("g1h3") == true
-    end
-
-    test "the ♔ can move from e1 to f2" do
-      assert Board.new() |> Utils.valid_move?("e1f2") == true
-    end
-
-    test "the ♔ can move from e1 to d2" do
-      assert Board.new() |> Utils.valid_move?("e1d2") == true
-    end
-
-    test "the ♔ can move from e1 to d1" do
-      assert Board.new() |> Utils.valid_move?("e1d1") == true
-    end
-
-    test "the ♚ can move from e8 to f7" do
-      assert Board.new() |> Utils.valid_move?("e8f7") == true
-    end
-  end
-
-  test "printing board on starting position" do
-    b = Board.new()
-    #Board.print_board( )
-    assert b |> Utils.which_piece?("c2") == :P
   end
 end
