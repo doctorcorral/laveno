@@ -2,8 +2,8 @@ defmodule Laveno.Board do
   alias Laveno.Board.Utils
 
   defstruct pieces: %{},
-            castles: <<8::size(4)>>,
-            bb: Utils.initial_position_binary(),
+            castles: <<15::size(4)>>,
+            bb: %{},
             active_color: <<0::1>>,
             en_passant: nil,
             halfmove_clock: 0,
@@ -32,11 +32,16 @@ defmodule Laveno.Board do
   @w_pieces [:P, :R, :N, :B, :K, :Q]
   @b_pieces [:p, :r, :n, :b, :k, :q]
 
-  def new(), do: %__MODULE__{}
+  @doc "Create a board with the standard initial position"
+  def new() do
+    %__MODULE__{bb: Utils.initial_position_binary()}
+  end
 
+  @doc "Create an empty board with no pieces"
   def new(:empty) do
-    new()
-    |> Map.put(:bb, Utils.empty_position_binary())
+    %__MODULE__{
+      bb: Utils.empty_position_binary()
+    }
   end
 
   def place_piece(board, piece, square) do
@@ -49,6 +54,92 @@ defmodule Laveno.Board do
 
   def log_move(%{moves: moves} = board, move) do
     Map.put(board, :moves, moves ++ [move])
+  end
+
+  # Special-case castling moves to move both king and rook and clear castling rights
+  def move(board = %__MODULE__{}, <<"e1g1">> = move) do
+    board
+    |> proc_castle(:K)
+    |> clear_square("e1")
+    |> clear_square("h1")
+    |> place_piece(:K, "g1")
+    |> place_piece(:R, "f1")
+    |> proc_en_passant(:K, move)
+    |> increment_count()
+    |> flip_active_color()
+    |> log_move(move)
+  end
+
+  def move(board = %__MODULE__{}, <<"e1c1">> = move) do
+    board
+    |> proc_castle(:K)
+    |> clear_square("e1")
+    |> clear_square("a1")
+    |> place_piece(:K, "c1")
+    |> place_piece(:R, "d1")
+    |> proc_en_passant(:K, move)
+    |> increment_count()
+    |> flip_active_color()
+    |> log_move(move)
+  end
+
+  def move(board = %__MODULE__{}, <<"e8g8">> = move) do
+    board
+    |> proc_castle(:k)
+    |> clear_square("e8")
+    |> clear_square("h8")
+    |> place_piece(:k, "g8")
+    |> place_piece(:r, "f8")
+    |> proc_en_passant(:k, move)
+    |> increment_count()
+    |> flip_active_color()
+    |> log_move(move)
+  end
+
+  def move(board = %__MODULE__{}, <<"e8c8">> = move) do
+    board
+    |> proc_castle(:k)
+    |> clear_square("e8")
+    |> clear_square("a8")
+    |> place_piece(:k, "c8")
+    |> place_piece(:r, "d8")
+    |> proc_en_passant(:k, move)
+    |> increment_count()
+    |> flip_active_color()
+    |> log_move(move)
+  end
+
+  # Special-case pawn promotion moves with explicit promotion piece
+  def move(board, <<c1::8, r1::8, c2::8, r2::8, promo::8>> = move) do
+    from_square = <<c1::8, r1::8>>
+    to_square   = <<c2::8, r2::8>>
+    piece = Utils.which_piece?(board, from_square)
+
+    if Utils.valid_move?(board, move) do
+      promo_piece = case {piece, promo} do
+        {:P, ?q} -> :Q
+        {:P, ?r} -> :R
+        {:P, ?b} -> :B
+        {:P, ?n} -> :N
+        {:p, ?q} -> :q
+        {:p, ?r} -> :r
+        {:p, ?b} -> :b
+        {:p, ?n} -> :n
+        _ -> piece
+      end
+
+      board
+      |> clear_square(from_square)
+      |> clear_square(to_square)
+      |> place_piece(promo_piece, to_square)
+      |> proc_castle(piece)
+      |> proc_en_passant(piece, move)
+      |> increment_count()
+      |> flip_active_color()
+      |> log_move(move)
+    else
+      {:error, "invalid move"}
+    end
   end
 
   def move(
@@ -113,6 +204,8 @@ defmodule Laveno.Board do
         case r1 do
           50 -> board |> set_en_passant(<<c2::8, r1 + 1::8>>)
           55 -> board |> set_en_passant(<<c2::8, r1 - 1::8>>)
+          # fallback for unexpected ranks: clear en passant
+          _  -> %{board | en_passant: nil}
         end
 
       false ->
