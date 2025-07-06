@@ -25,7 +25,7 @@ quit
 ```
 you should see
 ```sh
-id name laveno.one 0.1.0
+id name laveno.one 0.2.0
 id author Corral-Corral, Ricardo
 uciok
 readyok
@@ -41,7 +41,7 @@ by adding `laveno` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:laveno, "~> 0.1.0"}
+    {:laveno, "~> 0.2.0"}
   ]
 end
 ```

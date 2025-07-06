@@ -1,4 +1,4 @@
-## 0.1.1 [2025-07-05]
+## 0.2.0 [2025-07-06]
 
 - [New Feature] Implemented minimax negamax with ETS lookups.
 - [Bug Fix] Handling of castling, including SAN normalization.
