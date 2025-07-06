@@ -82,4 +82,63 @@ defmodule LavenoTest.PieceMovility.KingTest do
              |> Utils.valid_move?("a2h3") == false
     end
   end
+
+  describe "King perform castling:" do
+    test "the ♔ can castle O-O" do
+      board = Board.new(:empty)
+              |> Board.place_piece(:K, "e1")
+              |> Board.place_piece(:R, "h1")
+
+      assert Utils.valid_move?(board, "e1g1") == true
+      new_board = Board.move(board, "e1g1")
+
+      assert Utils.which_piece?(new_board, "g1") == :K
+      assert Utils.which_piece?(new_board, "f1") == :R
+      assert new_board.moves == ["e1g1"]
+    end
+
+    test "the ♔ can not castle O-O if the king has moved" do
+      board = Board.new(:empty)
+              |> Board.place_piece(:K, "e1")
+              |> Board.place_piece(:R, "h1")
+              |> Board.place_piece(:k, "e8")
+      moved_board =
+        board
+        |> Board.move("e1f1")
+        |> Board.move("e8e7")
+        |> Board.move("f1e1")
+        |> Board.move("e7e8")
+
+      assert Utils.valid_move?(moved_board, "e1g1") == false
+    end
+
+    test "the ♔ can not castle O-O if in enemy piece in range" do
+      board = Board.new(:empty)
+              |> Board.place_piece(:K, "e1")
+              |> Board.place_piece(:R, "h1")
+              |> Board.place_piece(:b, "h3")
+
+      assert Utils.valid_move?(board, "e1g1") == false
+    end
+
+    test "the ♚ can not castle O-O-O if no enemy piece in range" do
+      board = Board.new(:empty)
+              |> Board.place_piece(:k, "e8")
+              |> Board.place_piece(:r, "a8")
+              |> Board.place_piece(:K, "c6")
+       moved_board = board
+                |> Board.move("c6d5")
+      assert Utils.valid_move?(moved_board, "e8c8") == true
+    end
+
+    test "the ♚ can not castle O-O-O if enemy piece in range" do
+      board = Board.new(:empty)
+              |> Board.place_piece(:k, "e8")
+              |> Board.place_piece(:r, "a8")
+              |> Board.place_piece(:N, "e4")
+       moved_board = board
+                |> Board.move("e4d6")
+      assert Utils.valid_move?(moved_board, "e8c8") == false
+    end
+  end
 end
