@@ -73,10 +73,10 @@ defmodule LavenoTest.PieceMovility.QueenTest do
              |> Utils.valid_move?("d1f6") == false
     end
 
-    test "the ♕ can not move from f6 to d4" do
+    test "the ♕ can move from f6 to d4" do
       assert Board.new(:empty)
              |> Board.place_piece(:Q, "f6")
-             |> Utils.valid_move?("f6d4") == false
+             |> Utils.valid_move?("f6d4") == true
     end
 
     test "the ♕ can not move from d1 to h4" do

@@ -57,6 +57,8 @@ defmodule Laveno.Board.Utils do
   @w_pieces [:P, :R, :N, :B, :K, :Q]
   @b_pieces [:p, :r, :n, :b, :k, :q]
 
+  @all_pieces @w_pieces ++ @b_pieces
+
   def initial_position_binary() do
     %{
       P: <<0::8, 255::8, 0::48>>,
@@ -346,44 +348,214 @@ defmodule Laveno.Board.Utils do
   def color(piece) when piece in @b_pieces, do: :b
   def color(_), do: "-"
 
-  def valid_move?(
-        board,
-        move = <<c1::size(8), r1::size(8), c2::size(8), r2::size(8)>>
-      ) do
-    with true <- <<c1, r1>> != <<c2, r2>>,
-         {r_from, c_from, offset_from} <- rco(r1, c1),
-         {r_to, c_to, offset_to} <- rco(r2, c2),
-         piece <- which_piece?(board, offset_from),
-         piece_target <- which_piece?(board, offset_to),
-         true <- inbound?(piece, move),
-         true <- incolor?(piece, piece_target),
-         true <- indiagonalpawn?(board, piece, move),
-         true <- infirst?(piece, move) do
-      valid_move?(board, piece, offset_from, offset_to)
+  @doc """
+  Validate a move using file/rank geometry and path clearance
+  """
+  def valid_move?(board = %{castles: <<1::1, _::3>>}, <<"e1g1">>) do
+    # require a white king on e1 and a white rook on h1
+    if which_piece?(board, "e1") != :K or which_piece?(board, "h1") != :R do
+      false
     else
-      _ -> false
+      occ    = occupancy_mask(board)
+      empty  = square_mask("f1") ||| square_mask("g1")
+      attack = attack_mask(board, @b_pieces)
+      # mask for e1,f1,g1 bitboard = square_mask("e1") ||| square_mask("f1") ||| square_mask("g1")
+      mask_e1_f1_g1 = 0x0E00000000000000
+      (occ &&& empty) == 0 and
+      (attack &&& mask_e1_f1_g1) == 0
     end
   end
 
-  def valid_move?(board, piece, offset_from, offset_to) do
-    moves = moves(piece, offset_from)
-    offset_to_mask = <<1 <<< offset_to::size(64)>> |> :binary.decode_unsigned()
-
-    case (moves &&& offset_to_mask) != 0 do
-      true -> true
-      _ -> false
+  def valid_move?(board = %{castles: <<_::1,1::1,_::2>>}, <<"e1c1">>) do
+    # require a white king on e1 and a white rook on a1
+    if which_piece?(board, "e1") != :K or which_piece?(board, "a1") != :R do
+      false
+    else
+      occ    = occupancy_mask(board)
+      empty  = square_mask("d1") ||| square_mask("c1") ||| square_mask("b1")
+      attack = attack_mask(board, @b_pieces)
+      # mask for e1,d1,c1 bitboard = square_mask("e1") ||| square_mask("d1") ||| square_mask("c1")
+      mask_e1_d1_c1 = 0x3800000000000000
+      (occ &&& empty) == 0 and
+      (attack &&& mask_e1_d1_c1) == 0
     end
   end
 
-  def valid_move?(board, offset_from, offset_to) do
-    piece = which_piece?(board, offset_from)
-    moves = moves(piece, offset_from)
-    offset_to_mask = <<1 <<< offset_to::size(64)>> |> :binary.decode_unsigned()
-
-    case (moves &&& offset_to_mask) != 0 do
-      true -> true
-      _ -> false
+  def valid_move?(board = %{castles: <<_::2,1::1,_::1>>}, <<"e8g8">>) do
+    # require a black king on e8 and a black rook on h8
+    if which_piece?(board, "e8") != :k or which_piece?(board, "h8") != :r do
+      false
+    else
+      occ    = occupancy_mask(board)
+      empty  = square_mask("f8") ||| square_mask("g8")
+      attack = attack_mask(board, @w_pieces)
+      # mask for e8,f8,g8 bitboard = square_mask("e8") ||| square_mask("f8") ||| square_mask("g8")
+      mask_e8_f8_g8 = 0x0E
+      (occ &&& empty) == 0 and
+      (attack &&& mask_e8_f8_g8) == 0
     end
+  end
+
+  def valid_move?(board = %{castles: <<_::3,1::1>>}, <<"e8c8">>) do
+    # require a black king on e8 and a black rook on a1? a8
+    if which_piece?(board, "e8") != :k or which_piece?(board, "a8") != :r do
+      false
+    else
+      occ    = occupancy_mask(board)
+      empty  = square_mask("d8") ||| square_mask("c8") ||| square_mask("b8")
+      attack = attack_mask(board, @w_pieces)
+      # mask for e8,d8,c8 bitboard = square_mask("e8") ||| square_mask("d8") ||| square_mask("c8")
+      mask_e8_d8_c8 = 0x38
+      (occ &&& empty) == 0 and
+      (attack &&& mask_e8_d8_c8) == 0
+    end
+  end
+
+  def valid_move?(board, <<c1::8, r1::8, c2::8, r2::8, promo::8>>) do
+    file_from = c1 - @offset_column
+    rank_from = r1 - @offset_row
+    file_to   = c2 - @offset_column
+    rank_to   = r2 - @offset_row
+    from = <<c1, r1>>
+    to   = <<c2, r2>>
+    piece = which_piece?(board, from)
+    target = which_piece?(board, to)
+    # Determine direction and promotion rank based on piece color
+    dir = if color(piece) == :w, do: 1, else: -1
+    promotion_rank = if color(piece) == :w, do: 7, else: 0
+    # Promotion piece identifier must be one of q, r, b, n
+    valid_promo_piece? = promo in [?q, ?r, ?b, ?n]
+
+    if (piece in [:P, :p]) and rank_to == promotion_rank and valid_promo_piece? do
+      df = file_to - file_from
+      dr = rank_to - rank_from
+      cond do
+        # Normal forward promotion
+        df == 0 and dr == dir and target == nil ->
+          true
+        # Capture promotion
+        abs(df) == 1 and dr == dir and target != nil and color(target) != color(piece) ->
+          true
+        true ->
+          false
+      end
+    else
+      false
+    end
+  end
+
+  def valid_move?(board, move = <<c1::8, r1::8, c2::8, r2::8>>) do
+    file_from = c1 - @offset_column
+    rank_from = r1 - @offset_row
+    file_to   = c2 - @offset_column
+    rank_to   = r2 - @offset_row
+
+    if file_from == file_to and rank_from == rank_to do
+      false
+    else
+      piece = which_piece?(board, <<c1, r1>>)
+      to_square = <<c2, r2>>
+      target = which_piece?(board, to_square)
+
+      cond do
+        piece == nil ->
+          false
+
+        color(piece) == color(target) ->
+          false
+
+        true ->
+          do_valid_move?(board, piece, file_from, rank_from, file_to, rank_to, to_square)
+      end
+    end
+  end
+
+  defp do_valid_move?(board, piece, file_from, rank_from, file_to, rank_to, to_square) do
+    df = file_to - file_from
+    dr = rank_to - rank_from
+    df_abs = abs(df)
+    dr_abs = abs(dr)
+
+    cond do
+      piece == :P or piece == :p ->
+        valid_pawn_move?(board, piece, file_from, rank_from, file_to, rank_to, to_square)
+
+      piece in [:N, :n] ->
+        (df_abs == 1 and dr_abs == 2) or (df_abs == 2 and dr_abs == 1)
+
+      piece in [:K, :k] ->
+        df_abs <= 1 and dr_abs <= 1
+
+      piece in [:B, :b] ->
+        df_abs == dr_abs and df_abs > 0 and path_clear_line?(board, file_from, rank_from, file_to, rank_to)
+
+      piece in [:R, :r] ->
+        ((df == 0 and dr_abs > 0) or (dr == 0 and df_abs > 0)) and path_clear_line?(board, file_from, rank_from, file_to, rank_to)
+
+      piece in [:Q, :q] ->
+        cond do
+          df_abs == dr_abs and df_abs > 0 ->
+            path_clear_line?(board, file_from, rank_from, file_to, rank_to)
+
+          (df == 0 and dr_abs > 0) or (dr == 0 and df_abs > 0) ->
+            path_clear_line?(board, file_from, rank_from, file_to, rank_to)
+
+          true ->
+            false
+        end
+
+      true ->
+        false
+    end
+  end
+
+  defp valid_pawn_move?(board, piece, file_from, rank_from, file_to, rank_to, to_square) do
+    dir = if piece in @w_pieces, do: 1, else: -1
+    df = file_to - file_from
+    dr = rank_to - rank_from
+
+    cond do
+      df == 0 and dr == dir and which_piece?(board, to_square) == nil ->
+        true
+
+      df == 0 and dr == 2 * dir and rank_from == (if dir == 1, do: 1, else: 6) and
+        which_piece?(board, <<(@offset_column + file_from)::8, (@offset_row + rank_from + dir)::8>>) == nil and
+        which_piece?(board, to_square) == nil ->
+        true
+
+      abs(df) == 1 and dr == dir and
+        ((target = which_piece?(board, to_square)) != nil and color(target) != color(piece)) or
+          board.en_passant == to_square ->
+        true
+
+      true ->
+        false
+    end
+  end
+
+  defp path_clear_line?(board, file_from, rank_from, file_to, rank_to) do
+    df = file_to - file_from
+    dr = rank_to - rank_from
+    step_file = cond do
+      df > 0 -> 1
+      df < 0 -> -1
+      true -> 0
+    end
+
+    step_rank = cond do
+      dr > 0 -> 1
+      dr < 0 -> -1
+      true -> 0
+    end
+
+    max_delta = max(abs(df), abs(dr))
+    # when max_delta < 2, the range is empty
+    Enum.all?(1..(max_delta - 1)//1, fn i ->
+      file = file_from + step_file * i
+      rank = rank_from + step_rank * i
+      square = <<(@offset_column + file)::8, (@offset_row + rank)::8>>
+      which_piece?(board, square) == nil
+    end)
   end
 
   def rco(row, column) do
@@ -430,11 +602,34 @@ defmodule Laveno.Board.Utils do
   end
 
   def generate_moves(board = %{active_color: <<0::1>>}) do
+    # Only keep moves that do not leave white king in check
     moves_for_pieces(board, @w_pieces)
+    |> expand_promotions(board)
+    |> Enum.filter(fn move ->
+      case Board.move(board, move) do
+        %Board{} = new_board ->
+          # new_board.active_color is opponent; reset to mover to test king safety
+          board_after = %{new_board | active_color: board.active_color}
+          not in_check?(board_after)
+        _ ->
+          false
+      end
+    end)
   end
 
   def generate_moves(board = %{active_color: <<1::1>>}) do
+    # Only keep moves that do not leave black king in check
     moves_for_pieces(board, @b_pieces)
+    |> expand_promotions(board)
+    |> Enum.filter(fn move ->
+      case Board.move(board, move) do
+        %Board{} = new_board ->
+          board_after = %{new_board | active_color: board.active_color}
+          not in_check?(board_after)
+        _ ->
+          false
+      end
+    end)
   end
 
   def union_mask(%{bb: bb}, pieces) do
@@ -452,7 +647,7 @@ defmodule Laveno.Board.Utils do
       cond do
         # ↖
         c1 > c2 and r1 < r2 ->
-          Enum.reduce(1..(c1 - c2), [], fn delta, bits ->
+          Enum.reduce(1..(c1 - c2)//1, [], fn delta, bits ->
             {_row, _column, offset} = rco(r1 + delta, c1 - delta)
             [<<1 <<< offset::64>> | bits]
           end)
@@ -460,7 +655,7 @@ defmodule Laveno.Board.Utils do
 
         # ↘
         c1 < c2 and r1 > r2 ->
-          Enum.reduce(1..(c1 - c2), [], fn delta, bits ->
+          Enum.reduce(1..(c1 - c2)//1, [], fn delta, bits ->
             {_row, _column, offset} = rco(r1 - delta, c1 + delta)
             [<<1 <<< offset::64>> | bits]
           end)
@@ -468,7 +663,7 @@ defmodule Laveno.Board.Utils do
 
         # ↗
         c1 < c2 and r1 < r2 ->
-          Enum.reduce(1..(c1 - c2), [], fn delta, bits ->
+          Enum.reduce(1..(c1 - c2)//1, [], fn delta, bits ->
             {_row, _column, offset} = rco(r1 + delta, c1 + delta)
             [<<1 <<< offset::64>> | bits]
           end)
@@ -476,7 +671,7 @@ defmodule Laveno.Board.Utils do
 
         # ↙
         c1 > c2 and r1 > r2 ->
-          Enum.reduce(1..(c1 - c2), [], fn delta, bits ->
+          Enum.reduce(1..(c1 - c2)//1, [], fn delta, bits ->
             {_row, _column, offset} = rco(r1 - delta, c1 - delta)
             [<<1 <<< offset::64>> | bits]
           end)
@@ -495,7 +690,7 @@ defmodule Laveno.Board.Utils do
       cond do
         # ↑
         r1 < r2 ->
-          Enum.reduce(1..(r2 - r1), [], fn delta, bits ->
+          Enum.reduce(1..(r2 - r1)//1, [], fn delta, bits ->
             {_row, _column, offset} = rco(r1 + delta, c1)
             [<<1 <<< offset::64>> | bits]
           end)
@@ -503,7 +698,7 @@ defmodule Laveno.Board.Utils do
 
         # ↓
         r1 > r2 ->
-          Enum.reduce(1..(r1 - r2), [], fn delta, bits ->
+          Enum.reduce(1..(r1 - r2)//1, [], fn delta, bits ->
             {_row, _column, offset} = rco(r1 - delta, c1)
             [<<1 <<< offset::64>> | bits]
           end)
@@ -511,7 +706,7 @@ defmodule Laveno.Board.Utils do
 
         # ←
         c1 > c2 ->
-          Enum.reduce(1..(c1 - c2), [], fn delta, bits ->
+          Enum.reduce(1..(c1 - c2)//1, [], fn delta, bits ->
             {_row, _column, offset} = rco(r1, c1 - delta)
             [<<1 <<< offset::64>> | bits]
           end)
@@ -519,7 +714,7 @@ defmodule Laveno.Board.Utils do
 
         # →
         c1 < c2 ->
-          Enum.reduce(1..(c2 - c1), [], fn delta, bits ->
+          Enum.reduce(1..(c2 - c1)//1, [], fn delta, bits ->
             {_row, _column, offset} = rco(r1, c1 + delta)
             [<<1 <<< offset::64>> | bits]
           end)
@@ -539,22 +734,21 @@ defmodule Laveno.Board.Utils do
         with full_moves_mask <- moves(piece, piece_offset),
              self_union_mask <- union_mask(board, pieces),
              moves_mask <- full_moves_mask &&& ~~~self_union_mask do
-          Enum.reduce(0..63, [], fn to_offset, moves ->
-            case :binary.decode_unsigned(<<1 <<< to_offset::64>>) &&& moves_mask do
-              0 ->
-                moves
-
-              _ ->
-                with sq1 <- Maps.offset_to_square(piece_offset),
-                     sq2 <- Maps.offset_to_square(to_offset),
-                     move <- sq1 <> sq2,
-                     0 <- diagonal_path_mask(board, move) &&& self_union_mask,
-                     0 <- linear_path_mask(board, move) &&& self_union_mask,
-                     true <- valid_move?(board, move) do
-                  [move | moves]
-                else
-                  _ -> moves
-                end
+          Enum.reduce(0..63, [], fn to_offset, acc_moves ->
+            if (:binary.decode_unsigned(<<1 <<< to_offset::64>>) &&& moves_mask) != 0 do
+              sq1 = Maps.offset_to_square(piece_offset)
+              sq2 = Maps.offset_to_square(to_offset)
+              move = sq1 <> sq2
+              # Only block own pieces, allow captures on target
+              if (diagonal_path_mask(board, move) &&& self_union_mask) == 0 and
+                 (linear_path_mask(board, move) &&& self_union_mask) == 0 and
+                 valid_move?(board, move) do
+                [move | acc_moves]
+              else
+                acc_moves
+              end
+            else
+              acc_moves
             end
           end)
         end
@@ -590,6 +784,69 @@ defmodule Laveno.Board.Utils do
       board
       |> which_piece?(col <> to_string(row_number))
       |> piece_atom_to_unicode()
+    end)
+  end
+
+  @doc """
+  Returns true if the side to move is in check. We generate opponent moves and see if any can capture the king of side to move.
+  """
+  def in_check?(board) do
+    # Attacker moves are from the opponent
+    attacker_moves = case board.active_color do
+      <<0::1>> -> moves_for_pieces(board, @b_pieces)
+      <<1::1>> -> moves_for_pieces(board, @w_pieces)
+    end
+
+    # Defender king is of side to move
+    defender_king = case board.active_color do
+      <<0::1>> -> :K
+      <<1::1>> -> :k
+    end
+
+    # King square(s)
+    king_sqs = where_is(board, defender_king) |> Enum.map(&Maps.offset_to_square/1)
+
+    # If any attacker move targets the king square, it's check
+    Enum.any?(attacker_moves, fn <<_::16, c2::8, r2::8>> ->
+      <<c2, r2>> in king_sqs
+    end)
+  end
+
+  # Bitboard helper: integer mask for a given square
+  def square_mask(<<c::8, r::8>>) do
+    {_,_,off} = rco(r, c)
+    1 <<< off
+  end
+
+  # Mask of all occupied squares on the board
+  def occupancy_mask(board) do
+    union_mask(board, @w_pieces) ||| union_mask(board, @b_pieces)
+  end
+
+  # Attack mask: all squares attacked by given side pieces
+  def attack_mask(board, pieces) do
+    moves_for_pieces(board, pieces)
+    |> Enum.reduce(0, fn <<_::16, c2::8, r2::8>>, mask ->
+      {_,_,off} = rco(r2, c2)
+      mask ||| (1 <<< off)
+    end)
+  end
+
+  # Expand simple 4-byte pawn moves that reach last rank into promotion moves
+  defp expand_promotions(moves, board) do
+    Enum.flat_map(moves, fn
+      move = <<c1::8, r1::8, c2::8, r2::8>> ->
+        piece = which_piece?(board, <<c1, r1>>)
+        cond do
+          piece == :P and r2 == ?8 ->
+            for promo <- [?q, ?r, ?b, ?n], do: <<c1::8, r1::8, c2::8, r2::8, promo>>
+          piece == :p and r2 == ?1 ->
+            for promo <- [?q, ?r, ?b, ?n], do: <<c1::8, r1::8, c2::8, r2::8, promo>>
+          true ->
+            [move]
+        end
+      other ->
+        [other]
     end)
   end
 end

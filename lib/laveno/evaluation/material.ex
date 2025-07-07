@@ -1,5 +1,6 @@
 defmodule Laveno.Evaluation.Material do
-  @piece_values %{Q: 10, q: 10, P: 1, p: 1, N: 3, n: 3, B: 4, b: 4, R: 5, r: 5}
+  # Static piece values in centipawns
+  @piece_values %{Q: 900, q: 900, R: 500, r: 500, N: 300, n: 300, B: 300, b: 300, P: 100, p: 100}
 
   @w_pieces [:Q, :R, :N, :B, :P]
   @b_pieces [:q, :r, :n, :b, :p]
@@ -18,5 +19,10 @@ defmodule Laveno.Evaluation.Material do
     Enum.reduce(pieces, 0, fn piece, val ->
       val + length(Utils.where_is(board, piece)) * @piece_values[piece]
     end)
+  end
+
+  @doc "Get the centipawn value for a single piece atom"
+  def piece_value(piece) do
+    Map.get(@piece_values, piece, 0)
   end
 end

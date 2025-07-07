@@ -12,13 +12,13 @@ defmodule LavenoTest.PieceMovility.BishopTest do
              |> Utils.valid_move?("c2e4") == true
     end
 
-    test "a ♗ can not move from a1 to h8" do
+    test "a ♗ can move from a1 to h8" do
       assert Board.new(:empty)
              |> Board.place_piece(:B, "a1")
              |> Utils.valid_move?("a1h8") == true
     end
 
-    test "a ♗ can not move from h1 to a8" do
+    test "a ♗ can move from h1 to a8" do
       assert Board.new(:empty)
              |> Board.place_piece(:B, "h1")
              |> Utils.valid_move?("h1a8") == true
@@ -84,10 +84,10 @@ defmodule LavenoTest.PieceMovility.BishopTest do
              |> Utils.valid_move?("h3a5") == false
     end
 
-    test "a ♗ can not move from f1 to a6" do
+    test "a ♗ can move from f1 to a6" do
       assert Board.new(:empty)
              |> Board.place_piece(:B, "f1")
-             |> Utils.valid_move?("f1a6") == false
+             |> Utils.valid_move?("f1a6") == true
     end
   end
 end
