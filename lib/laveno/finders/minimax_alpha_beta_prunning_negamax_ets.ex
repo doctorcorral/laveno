@@ -141,7 +141,7 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
     end
     # MVV-LVA: sort captures by victim value descending
     {captures, others} = Enum.split_with(base, &capture_move?(board, &1))
-    captures_sorted = Enum.sort_by(captures, fn <<_::16, c2::8, r2::8>> ->
+    captures_sorted = Enum.sort_by(captures, fn <<_::16, c2::8, r2::8, _::binary>> ->
       case Utils.which_piece?(board, <<c2, r2>>) do
         nil -> 0
         piece -> Material.piece_value(piece)

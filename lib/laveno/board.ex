@@ -115,7 +115,8 @@ defmodule Laveno.Board do
     to_square   = <<c2::8, r2::8>>
     piece = Utils.which_piece?(board, from_square)
 
-    if Utils.valid_move?(board, move) do
+    with true <- Utils.valid_move?(board, move),
+         true <- right_turn?(board, piece) do
       promo_piece = case {piece, promo} do
         {:P, ?q} -> :Q
         {:P, ?r} -> :R
@@ -138,7 +139,7 @@ defmodule Laveno.Board do
       |> flip_active_color()
       |> log_move(move)
     else
-      {:error, "invalid move"}
+      _ -> {:error, "invalid move"}
     end
   end
 
