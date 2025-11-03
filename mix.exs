@@ -9,8 +9,14 @@ defmodule Laveno.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       name: "l a v e n o  ♜",
+      description: "Elixir Chess Engine",
       homepage_url: "https://laveno.one",
       docs: [main: "l a v e n o ♟"],
+      package: [
+        maintainers: ["Ricardo Corral-Corral"],
+        licenses: ["MIT"],
+        links: %{"GitHub" => "https://github.com/doctorcorral/laveno"}
+      ]
       escript: escript(),
       releases: releases()
     ]
