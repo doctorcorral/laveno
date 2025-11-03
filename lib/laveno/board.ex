@@ -115,7 +115,8 @@ defmodule Laveno.Board do
     to_square   = <<c2::8, r2::8>>
     piece = Utils.which_piece?(board, from_square)
 
-    if Utils.valid_move?(board, move) do
+    with true <- Utils.valid_move?(board, move),
+         true <- right_turn?(board, piece) do
       promo_piece = case {piece, promo} do
         {:P, ?q} -> :Q
         {:P, ?r} -> :R
@@ -134,11 +135,11 @@ defmodule Laveno.Board do
       |> place_piece(promo_piece, to_square)
       |> proc_castle(piece)
       |> proc_en_passant(piece, move)
-      |> increment_count()
+      |> reset_halfmove_clock()
       |> flip_active_color()
       |> log_move(move)
     else
-      {:error, "invalid move"}
+      _ -> {:error, "invalid move"}
     end
   end
 
@@ -151,13 +152,17 @@ defmodule Laveno.Board do
          to_square <- <<c2::8, r2::8>>,
          piece <- Utils.which_piece?(board, from_square),
          true <- right_turn?(board, piece) do
+      # Check if this is a capture or pawn move
+      is_capture = Utils.which_piece?(board, to_square) != nil
+      is_pawn_move = piece in [:P, :p]
+
       board
       |> clear_square(from_square)
       |> clear_square(to_square)
       |> place_piece(piece, to_square)
       |> proc_castle(piece)
       |> proc_en_passant(piece, move)
-      |> increment_count()
+      |> (if is_pawn_move or is_capture, do: &reset_halfmove_clock/1, else: &increment_count/1).()
       |> flip_active_color()
       |> log_move(move)
     else
@@ -180,6 +185,14 @@ defmodule Laveno.Board do
   end
 
   def increment_count(board = %{halfmove_clock: 1, fullmove_number: fullmn}) do
+    %{board | halfmove_clock: 0, fullmove_number: fullmn + 1}
+  end
+
+  def reset_halfmove_clock(board = %{halfmove_clock: 0, fullmove_number: fullmn}) do
+    %{board | fullmove_number: fullmn + 1}
+  end
+
+  def reset_halfmove_clock(board = %{halfmove_clock: 1, fullmove_number: fullmn}) do
     %{board | halfmove_clock: 0, fullmove_number: fullmn + 1}
   end
 

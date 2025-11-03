@@ -4,13 +4,19 @@ defmodule Laveno.MixProject do
   def project do
     [
       app: :laveno,
-      version: "0.2.0",
+      version: "0.2.1",
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       name: "l a v e n o  ♜",
+      description: "Elixir Chess Engine",
       homepage_url: "https://laveno.one",
       docs: [main: "l a v e n o ♟"],
+      package: [
+        maintainers: ["Ricardo Corral-Corral"],
+        licenses: ["MIT"],
+        links: %{"GitHub" => "https://github.com/doctorcorral/laveno"}
+      ],
       escript: escript(),
       releases: releases()
     ]
