@@ -431,13 +431,13 @@ defmodule LavenoTest.PieceMovility.PromotionTest do
       assert board.en_passant == nil
     end
 
-    test "promotion increments move counters" do
+    test "promotion resets halfmove clock" do
       board = Board.new(:empty)
               |> Board.place_piece(:P, "e7")
               |> Board.set_active_color("w")
               |> Board.move("e7e8q")
 
-      assert board.halfmove_clock == 1
+      assert board.halfmove_clock == 0
     end
 
     test "promotion flips active color" do
