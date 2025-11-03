@@ -16,7 +16,7 @@ defmodule Laveno.MixProject do
         maintainers: ["Ricardo Corral-Corral"],
         licenses: ["MIT"],
         links: %{"GitHub" => "https://github.com/doctorcorral/laveno"}
-      ]
+      ],
       escript: escript(),
       releases: releases()
     ]
