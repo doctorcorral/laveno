@@ -1,3 +1,7 @@
+## 0.3.0 [2025-11-20]
+
+- [New Feature] Add correspondence game support.
+
 ## 0.2.1 [2025-11-02]
 
 - [Bug Fix] Proper move validation on promotion moves.
