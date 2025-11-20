@@ -16,6 +16,8 @@ defmodule Laveno.UCI do
   end
 
   @depth 2
+  @correspondence_depth 3
+  @correspondence_movetime 60_000  # Correspondence games use 60 seconds (60000ms)
 
   def main(args) do
     # Trap unexpected exceptions and write to crash.log
@@ -152,9 +154,12 @@ defmodule Laveno.UCI do
     do_go(board, finder, depth)
   end
 
-  # Handle go movetime (fallback to default depth)
-  def handle({:go_movetime}, board, finder) do
-    do_go(board, finder, @depth)
+  # Handle go movetime with dynamic depth based on time
+  def handle({:go_movetime, movetime_ms}, board, finder) do
+    # Use correspondence depth for correspondence games (exact match for 60 seconds)
+    # Use default depth for faster games
+    depth = if movetime_ms == @correspondence_movetime, do: @correspondence_depth, else: @depth
+    do_go(board, finder, depth)
   end
 
   # Unified go execution: detect no legal moves or perform search
@@ -184,8 +189,9 @@ defmodule Laveno.UCI do
       # support 'go depth N' with additional parameters
       ["go", "depth", depth_str | _] ->
         {handle({:go_depth, String.to_integer(depth_str)}, board, finder), finder}
-      ["go", "movetime", _ | _] ->
-        {handle({:go_movetime}, board, finder), finder}
+      ["go", "movetime", movetime_str | _] ->
+        movetime_ms = String.to_integer(movetime_str)
+        {handle({:go_movetime, movetime_ms}, board, finder), finder}
       ["go", "infinite" | _] ->
         {handle(:go, board, finder), finder}
       _ ->
