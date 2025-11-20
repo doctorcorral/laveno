@@ -11,7 +11,10 @@ defmodule Laveno.MixProject do
       name: "l a v e n o  ♜",
       description: "Elixir Chess Engine",
       homepage_url: "https://laveno.one",
-      docs: [main: "l a v e n o ♟"],
+      docs: [
+        main: "Laveno",
+        extras: ["README.md"]
+      ],
       package: [
         maintainers: ["Ricardo Corral-Corral"],
         licenses: ["MIT"],
