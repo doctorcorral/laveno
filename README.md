@@ -61,7 +61,7 @@ quit
 ' | ./laveno | cat
 ```
 
-This gives Laveno 60 seconds (60,000ms) to find the best move.
+The `movetime 60000` parameter tells the engine to think for 60 seconds before returning a move. This is the default value used by lichess-bot for correspondence games - not because correspondence games need quick responses, but as a practical balance between computational depth and response time. While correspondence games allow days per move, the engine still benefits from focused thinking time to analyze positions deeply. Lichess-bot uses this as a reasonable timeout to ensure the bot responds promptly when it's its turn to move.
 
 ### Integration with Lichess Bot
 
