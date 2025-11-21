@@ -61,7 +61,7 @@ quit
 ' | ./laveno | cat
 ```
 
-The `movetime 60000` parameter tells the engine to think for 60 seconds before returning a move. This is the default value used by lichess-bot for correspondence games - not because correspondence games need quick responses, but as a practical balance between computational depth and response time. While correspondence games allow days per move, the engine still benefits from focused thinking time to analyze positions deeply. Lichess-bot uses this as a reasonable timeout to ensure the bot responds promptly when it's its turn to move.
+The `movetime 60000` value is how lichess-bot signals to the engine that this is a correspondence game (configured in lichess-bot's `correspondence.move_time` setting). This is not an actual 60-second time limit - in correspondence games, the engine can take much longer (hours or even longer) to analyze positions deeply. The engine will continue thinking until it completes its search or reaches other internal stopping criteria, taking full advantage of the extended time controls that correspondence games allow.
 
 ### Integration with Lichess Bot
 
