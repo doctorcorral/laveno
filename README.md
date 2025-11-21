@@ -21,7 +21,7 @@ isready
 position startpos moves e2e4
 go wtime 1000 btime 1000 winc 0 binc 0
 quit
-' | ./laveno --finder alphabeta-negamax-ets | cat
+' | ./laveno | cat
 ```
 you should see
 ```sh
@@ -41,7 +41,7 @@ Laveno supports correspondence chess games, where moves are exchanged asynchrono
 
 1. **Long Time Controls**: Unlike rapid or blitz games, correspondence games allow for much longer thinking time (hours or even days per move)
 2. **UCI Compatible**: Laveno follows the Universal Chess Interface protocol, making it compatible with any UCI-compliant chess GUI or server
-3. **Advanced Finders**: Use the `--finder` flag to select different search algorithms optimized for deep analysis
+3. **Advanced Search**: Laveno uses negamax with alpha-beta pruning and transposition tables optimized for deep analysis
 
 ### Playing Correspondence Games
 
@@ -58,16 +58,10 @@ isready
 position startpos moves e2e4 e7e5
 go movetime 60000
 quit
-' | ./laveno --finder alphabeta-negamax-ets | cat
+' | ./laveno | cat
 ```
 
 This gives Laveno 60 seconds (60,000ms) to find the best move.
-
-### Available Finders
-
-- `alphabeta` - Classic alpha-beta pruning
-- `alphabeta-ets` - Alpha-beta with ETS transposition table
-- `alphabeta-negamax-ets` - Negamax with alpha-beta pruning and transposition table (recommended)
 
 ### Integration with Lichess Bot
 
