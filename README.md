@@ -33,6 +33,46 @@ info depth 2 score cp -1 nodes 0 time 0 pv c7c5
 bestmove c7c5
 ```
 
+## Correspondence Games
+
+Laveno supports correspondence chess games, where moves are exchanged asynchronously with longer time controls. This is ideal for playing against other engines or players with deliberate, thoughtful gameplay.
+
+### How Correspondence Games Work
+
+1. **Long Time Controls**: Unlike rapid or blitz games, correspondence games allow for much longer thinking time (hours or even days per move)
+2. **UCI Compatible**: Laveno follows the Universal Chess Interface protocol, making it compatible with any UCI-compliant chess GUI or server
+3. **Advanced Finders**: Use the `--finder` flag to select different search algorithms optimized for deep analysis
+
+### Playing Correspondence Games
+
+To play a correspondence game, you can use Laveno with a chess GUI like:
+- **Arena Chess GUI**
+- **Cute Chess**
+- **Lichess** (via lichess-bot)
+
+Example configuration for longer time controls:
+
+```sh
+printf 'uci
+isready
+position startpos moves e2e4 e7e5
+go movetime 60000
+quit
+' | ./laveno --finder alphabeta-negamax-ets | cat
+```
+
+This gives Laveno 60 seconds (60,000ms) to find the best move.
+
+### Available Finders
+
+- `alphabeta` - Classic alpha-beta pruning
+- `alphabeta-ets` - Alpha-beta with ETS transposition table
+- `alphabeta-negamax-ets` - Negamax with alpha-beta pruning and transposition table (recommended)
+
+### Integration with Lichess Bot
+
+Laveno can be integrated with [lichess-bot](https://github.com/lichess-bot-devs/lichess-bot) to play correspondence games on Lichess.org. Configure it as a UCI engine in the `config.yml` file.
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed
