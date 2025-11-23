@@ -5,3 +5,4 @@
 /doc
 /priv/repo/migrations/*.exs
 /*.ez
+/laveno
