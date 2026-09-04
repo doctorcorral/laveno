@@ -568,6 +568,20 @@ defmodule Laveno.Board.Utils do
     |> Enum.filter(&king_safe_after?(board, &1))
   end
 
+  @doc """
+  Captures, en passant, and promotions. Used by quiescence so it does not
+  expand every quiet move.
+  """
+  def generate_noisy(board = %{active_color: <<0::1>>}) do
+    noisy_for_pieces(board, @w_pieces)
+    |> Enum.filter(&king_safe_after?(board, &1))
+  end
+
+  def generate_noisy(board = %{active_color: <<1::1>>}) do
+    noisy_for_pieces(board, @b_pieces)
+    |> Enum.filter(&king_safe_after?(board, &1))
+  end
+
   # King move masks are one square; castling must be injected separately
   # so the engine can play O-O / O-O-O in tournament games.
   defp castle_moves(%{active_color: <<0::1>>} = board) do
@@ -682,6 +696,52 @@ defmodule Laveno.Board.Utils do
         encode_dests(piece, from, dests)
       end)
     end)
+  end
+
+  defp noisy_for_pieces(board, pieces) do
+    occ = occupancy_mask(board)
+    own = union_mask(board, pieces)
+    enemy = occ &&& ~~~own
+    ep_bit = ep_bit(board.en_passant)
+
+    Enum.flat_map(pieces, fn piece ->
+      Enum.flat_map(Attacks.bits(board.bb[piece]), fn from ->
+        dests = noisy_dests(piece, from, occ, own, enemy, ep_bit)
+        encode_dests(piece, from, dests)
+      end)
+    end)
+  end
+
+  defp noisy_dests(:P, from, occ, _own, enemy, ep) do
+    caps = Attacks.pawn_attacks_white(from) &&& (enemy ||| ep)
+
+    promo_push =
+      if from >= 8 and from <= 15 do
+        single = 1 <<< (from - 8)
+        if (occ &&& single) == 0, do: single, else: 0
+      else
+        0
+      end
+
+    caps ||| promo_push
+  end
+
+  defp noisy_dests(:p, from, occ, _own, enemy, ep) do
+    caps = Attacks.pawn_attacks_black(from) &&& (enemy ||| ep)
+
+    promo_push =
+      if from >= 48 and from <= 55 do
+        single = 1 <<< (from + 8)
+        if (occ &&& single) == 0, do: single, else: 0
+      else
+        0
+      end
+
+    caps ||| promo_push
+  end
+
+  defp noisy_dests(piece, from, occ, own, enemy, ep) do
+    piece_dests(piece, from, occ, own, enemy, ep) &&& enemy
   end
 
   defp ep_bit(<<c::8, r::8>>), do: square_mask(<<c, r>>)

@@ -8,6 +8,11 @@
 #   generate_moves kiwipete: 50 legal  6.783 ms/call
 #   in_check? startpos:                102.15 us/call
 #   search d2 kiwipete: 60000ms time-slice (TT-polluted / qsearch blow-up)
+#
+# After integer bitboards / attack tables (same machine, TT cleared):
+#   search d2 startpos:  38.1ms   185 nodes
+#   search d2 e4e5:      13.5ms   252 nodes
+#   search d2 kiwipete:   11.0s   216887 nodes
 
 alias Laveno.Board
 alias Laveno.Board.Utils
@@ -39,6 +44,13 @@ baseline = %{
   {"generate_moves", "e4e5"} => {20, 3.896},
   {"generate_moves", "kiwipete"} => {50, 6.783},
   {"in_check?", "startpos"} => {nil, 102.15}
+}
+
+# Depth-2 search after the bitboard work, before qsearch pruning.
+search_baseline = %{
+  "startpos" => {38.1, 185},
+  "e4e5" => {13.5, 252},
+  "kiwipete" => {10_997.9, 216_887}
 }
 
 time_ms = fn fun, n ->
@@ -90,8 +102,11 @@ Enum.each([{2, 15_000}], fn {depth, budget} ->
     nodes = SearchControl.nodes()
     nps = if ms > 0, do: round(nodes / (ms / 1000)), else: 0
     aborted = SearchControl.aborting?()
+    {base_ms, base_nodes} = search_baseline[name]
+    speedup = if ms > 0, do: base_ms / ms, else: 0
+
     IO.puts(
-      "search d#{depth} #{name}: #{Float.round(ms, 1)}ms  nodes=#{nodes} nps=#{nps} aborted=#{aborted} eval=#{inspect(eval)} pv=#{inspect(move)}"
+      "search d#{depth} #{name}: #{Float.round(ms, 1)}ms  nodes=#{nodes} nps=#{nps} aborted=#{aborted} eval=#{inspect(eval)} pv=#{inspect(move)}  #{Float.round(speedup, 1)}x vs bitboard-only #{base_ms}ms / #{base_nodes} nodes"
     )
   end)
 end)

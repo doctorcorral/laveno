@@ -4,9 +4,10 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
   null-move pruning, quiescence search, and optional root-split SMP.
   """
   alias Laveno.Board
+  alias Laveno.Board.See
   alias Laveno.Board.Utils
-  alias Laveno.Evaluation.Evaluator
   alias Laveno.Evaluation.Material
+  alias Laveno.Evaluation.Placement
   alias Laveno.SearchControl
 
   @neg_inf -1_000_000
@@ -15,6 +16,8 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
   @killer_table :laveno_killer
   @null_r 2
   @default_max_depth 64
+  @qsearch_max_ply 8
+  @delta_margin 200
 
   @spec find(Board.t(), integer(), integer(), integer()) :: {integer(), Board.t()}
   def find(board, max_depth, alpha, beta) do
@@ -214,45 +217,94 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
 
   defp apply_move(board, _), do: board
 
-  defp quiesce(board, alpha, beta) do
+  defp quiesce(board, alpha, beta), do: quiesce(board, alpha, beta, 0)
+
+  defp quiesce(board, alpha, beta, ply) do
     SearchControl.inc_nodes()
 
-    if SearchControl.aborting?() do
-      {alpha, board}
-    else
-      stand0 = Evaluator.eval(board)
-      stand = if board.active_color == <<0::1>>, do: stand0, else: -stand0
-      if stand >= beta, do: {stand, board}, else: do_quiesce(board, stand, alpha, beta)
+    cond do
+      SearchControl.aborting?() ->
+        {alpha, board}
+
+      ply >= @qsearch_max_ply ->
+        {stand_pat(board), board}
+
+      Utils.in_check?(board) ->
+        case Utils.generate_moves(board) do
+          [] ->
+            {-10_000, board}
+
+          evasions ->
+            qsearch_moves(board, evasions, alpha, beta, ply, false, nil)
+        end
+
+      true ->
+        stand = stand_pat(board)
+
+        if stand >= beta do
+          {stand, board}
+        else
+          alpha = max(alpha, stand)
+
+          noisy =
+            Utils.generate_noisy(board)
+            |> Enum.sort_by(&noisy_order(board, &1), :desc)
+
+          qsearch_moves(board, noisy, alpha, beta, ply, true, stand)
+        end
     end
   end
 
-  defp do_quiesce(board, stand, alpha, beta) do
-    alpha = max(alpha, stand)
+  defp stand_pat(board) do
+    score = Material.eval(board) + Placement.eval(board)
+    if board.active_color == <<0::1>>, do: score, else: -score
+  end
 
-    captures =
-      Utils.generate_moves(board)
-      |> Enum.filter(&capture_move?(board, &1))
-
-    Enum.reduce_while(captures, {alpha, board}, fn mv, {a, b_board} ->
+  defp qsearch_moves(board, moves, alpha, beta, ply, prune?, stand) do
+    Enum.reduce_while(moves, {alpha, board}, fn mv, {a, b_board} ->
       if SearchControl.aborting?() do
         {:halt, {a, b_board}}
       else
-        case Board.move(board, mv) do
-          %Board{} = nb ->
-            {score, _} = quiesce(nb, -beta, -a)
-            score = -score
+        if prune? and prune_noisy?(board, mv, a, stand) do
+          {:cont, {a, b_board}}
+        else
+          case Board.move(board, mv) do
+            %Board{} = nb ->
+              {score, _} = quiesce(nb, -beta, -a, ply + 1)
+              score = -score
 
-            cond do
-              score >= beta -> {:halt, {score, nb}}
-              score > a -> {:cont, {score, nb}}
-              true -> {:cont, {a, board}}
-            end
+              cond do
+                score >= beta -> {:halt, {score, nb}}
+                score > a -> {:cont, {score, nb}}
+                true -> {:cont, {a, board}}
+              end
 
-          _ ->
-            {:cont, {a, board}}
+            _ ->
+              {:cont, {a, board}}
+          end
         end
       end
     end)
+  end
+
+  defp prune_noisy?(_board, <<_::32, _promo::8>>, _alpha, _stand), do: false
+
+  defp prune_noisy?(board, move, alpha, stand) do
+    victim = capture_value(board, move)
+    stand + victim + @delta_margin < alpha or See.of(board, move) < 0
+  end
+
+  defp capture_value(board, <<_::16, c2::8, r2::8, _::binary>>) do
+    See.value(Utils.which_piece?(board, <<c2, r2>>))
+  end
+
+  defp noisy_order(board, move) do
+    See.value(moved_piece(board, move))
+    |> then(fn att -> capture_value(board, move) * 16 - att end)
+  end
+
+  defp moved_piece(board, <<c1::8, r1::8, _::binary>>) do
+    Utils.which_piece?(board, <<c1, r1>>)
   end
 
   defp capture_move?(board, <<_::16, c2::8, r2::8, _::binary>>) do
