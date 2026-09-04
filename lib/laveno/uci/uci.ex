@@ -203,70 +203,17 @@ defmodule Laveno.UCI do
       budget = think_time_ms(params, board, state)
       depth = Map.get(params, :depth, @max_search_depth)
       SearchControl.start_search(budget)
-      parent = self()
-      threads = state.threads
 
-      task =
-        Task.async(fn ->
-          result = Finder.find(board, depth, -1_000_000, 1_000_000, threads: threads)
-          send(parent, {:search_done, result})
-          result
-        end)
+      # Search on this process. A parallel stdin reader steals the next
+      # `position` / `go` from Cute Chess and deadlocks the match.
+      {eval, new_board} =
+        Finder.find(board, depth, -1_000_000, 1_000_000, threads: state.threads)
 
-      reader = spawn_link(fn -> send(parent, {:uci_line, IO.gets("")}) end)
-      wait_search(task, reader, state, legal)
+      move = List.last(new_board.moves) || List.first(legal) || "0000"
+      emit_info(eval, move)
+      safe_puts("bestmove #{move}")
+      %{state | board: new_board}
     end
-  end
-
-  defp wait_search(task, reader, state, legal) do
-    receive do
-      {:search_done, {eval, new_board}} ->
-        if Process.alive?(reader), do: Process.exit(reader, :kill)
-        _ = Task.shutdown(task, :brutal_kill)
-        move = List.last(new_board.moves) || List.first(legal) || "0000"
-        emit_info(eval, move)
-        safe_puts("bestmove #{move}")
-        %{state | board: new_board}
-
-      {:uci_line, :eof} ->
-        await_search_result(task, state, legal)
-
-      {:uci_line, nil} ->
-        await_search_result(task, state, legal)
-
-      {:uci_line, raw} ->
-        cmd =
-          raw
-          |> to_string()
-          |> String.trim()
-          |> String.replace("\r", "")
-
-        cond do
-          cmd in ["stop", "quit", "exit"] ->
-            SearchControl.request_stop()
-            new_state = await_search_result(task, state, legal)
-            if cmd == "stop", do: new_state, else: :halt
-
-          cmd == "isready" ->
-            safe_puts("readyok")
-            parent = self()
-            next_reader = spawn_link(fn -> send(parent, {:uci_line, IO.gets("")}) end)
-            wait_search(task, next_reader, state, legal)
-
-          true ->
-            parent = self()
-            next_reader = spawn_link(fn -> send(parent, {:uci_line, IO.gets("")}) end)
-            wait_search(task, next_reader, state, legal)
-        end
-    end
-  end
-
-  defp await_search_result(task, state, legal) do
-    {eval, new_board} = Task.await(task, :infinity)
-    move = List.last(new_board.moves) || List.first(legal) || "0000"
-    emit_info(eval, move)
-    safe_puts("bestmove #{move}")
-    %{state | board: new_board}
   end
 
   defp engine_version do
