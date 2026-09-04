@@ -687,7 +687,7 @@ defmodule Laveno.Board.Utils do
   def moves_for_pieces(board, pieces) do
     occ = occupancy_mask(board)
     own = union_mask(board, pieces)
-    enemy = occ &&& ~~~own
+    enemy = capturable(board, own)
     ep_bit = ep_bit(board.en_passant)
 
     Enum.flat_map(pieces, fn piece ->
@@ -698,10 +698,15 @@ defmodule Laveno.Board.Utils do
     end)
   end
 
+  defp capturable(board, own) do
+    kings = Attacks.as_int(board.bb[:K]) ||| Attacks.as_int(board.bb[:k])
+    occupancy_mask(board) &&& ~~~own &&& ~~~kings
+  end
+
   defp noisy_for_pieces(board, pieces) do
     occ = occupancy_mask(board)
     own = union_mask(board, pieces)
-    enemy = occ &&& ~~~own
+    enemy = capturable(board, own)
     ep_bit = ep_bit(board.en_passant)
 
     Enum.flat_map(pieces, fn piece ->

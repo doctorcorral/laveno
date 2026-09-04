@@ -7,7 +7,6 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
   alias Laveno.Board.See
   alias Laveno.Board.Utils
   alias Laveno.Evaluation.Evaluator
-  alias Laveno.Evaluation.Material
   alias Laveno.SearchControl
 
   @neg_inf -1_000_000
@@ -134,8 +133,20 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
       key = position_key(board)
 
       case :ets.lookup(@table, key) do
-        [{^key, stored_depth, stored_eval, best_move}] when stored_depth >= depth ->
-          {stored_eval, apply_move(board, best_move)}
+        [{^key, stored_depth, stored_eval, best_move, flag}] when stored_depth >= depth ->
+          cond do
+            flag == :exact ->
+              {stored_eval, apply_move(board, best_move)}
+
+            flag == :lower and stored_eval >= beta ->
+              {stored_eval, apply_move(board, best_move)}
+
+            flag == :upper and stored_eval <= alpha ->
+              {stored_eval, apply_move(board, best_move)}
+
+            true ->
+              negamax(board, depth, alpha, beta)
+          end
 
         _ ->
           negamax(board, depth, alpha, beta)
@@ -173,6 +184,7 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
   end
 
   defp search_moves(board, depth, alpha, beta) do
+    alpha_orig = alpha
     moves = ordered_moves(board, depth)
 
     {best_score, best_move, _a} =
@@ -201,8 +213,15 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
         end
       end)
 
-    if is_binary(best_move) do
-      :ets.insert(@table, {position_key(board), depth, best_score, best_move})
+    if is_binary(best_move) and not SearchControl.aborting?() do
+      flag =
+        cond do
+          best_score <= alpha_orig -> :upper
+          best_score >= beta -> :lower
+          true -> :exact
+        end
+
+      :ets.insert(@table, {position_key(board), depth, best_score, best_move, flag})
     end
 
     {best_score, apply_move(board, best_move)}
@@ -318,6 +337,7 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
 
     base =
       case :ets.lookup(@table, position_key(board)) do
+        [{_, _, _, bm, _}] when bm != nil -> [bm | List.delete(base, bm)]
         [{_, _, _, bm}] when bm != nil -> [bm | List.delete(base, bm)]
         _ -> base
       end
@@ -328,13 +348,11 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
     captures_sorted =
       Enum.sort_by(
         captures,
-        fn <<_::16, c2::8, r2::8, _::binary>> ->
-          case Utils.which_piece?(board, <<c2, r2>>) do
-            nil -> 0
-            piece -> Material.piece_value(piece)
-          end
+        fn mv ->
+          see = See.of(board, mv)
+          {if(see >= 0, do: 1, else: 0), see, capture_value(board, mv)}
         end,
-        &>=/2
+        :desc
       )
 
     killer =

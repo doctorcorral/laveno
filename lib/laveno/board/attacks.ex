@@ -71,6 +71,16 @@ defmodule Laveno.Board.Attacks do
 
   def bits(other), do: bits(as_int(other))
 
+  def popcount(0), do: 0
+  def popcount(bb) when is_integer(bb) and bb > 0, do: popcount_acc(bb, 0)
+  def popcount(other), do: popcount(as_int(other))
+
+  defp popcount_acc(0, n), do: n
+
+  defp popcount_acc(bb, n) do
+    popcount_acc(bxor(bb, bb &&& -bb), n + 1)
+  end
+
   def knight_attacks(sq), do: elem(@tables.knight, sq)
   def king_attacks(sq), do: elem(@tables.king, sq)
   def pawn_attacks_white(sq), do: elem(@tables.wpawn, sq)
