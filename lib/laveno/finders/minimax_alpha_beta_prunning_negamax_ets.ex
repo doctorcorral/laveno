@@ -1,7 +1,7 @@
 defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
   @moduledoc """
   Alpha-beta negamax with ETS transposition table, iterative deepening,
-  null-move pruning, quiescence search, and optional root-split SMP.
+  null-move pruning, LMR, futility, quiescence search, and optional root-split SMP.
   """
   alias Laveno.Board
   alias Laveno.Board.See
@@ -17,6 +17,10 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
   @default_max_depth 64
   @qsearch_max_ply 8
   @delta_margin 200
+  @lmr_min_depth 3
+  @lmr_min_move 3
+  @futility_margin 175
+  @rfp_margin 90
 
   @spec find(Board.t(), integer(), integer(), integer()) :: {integer(), Board.t()}
   def find(board, max_depth, alpha, beta) do
@@ -159,6 +163,9 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
       SearchControl.aborting?() ->
         {alpha, board}
 
+      reverse_futile?(board, depth, beta) ->
+        {stand_pat(board), board}
+
       null_move_cutoff?(board, depth, beta) ->
         {beta, board}
 
@@ -171,6 +178,12 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
           search_moves(board, depth, alpha, beta)
         end
     end
+  end
+
+  # If even a quiet stand-pat is a fail-high, skip the remaining tree.
+  defp reverse_futile?(board, depth, beta) do
+    depth in 1..2 and beta < 9_000 and not Utils.in_check?(board) and
+      stand_pat(board) - @rfp_margin * depth >= beta
   end
 
   defp null_move_cutoff?(board, depth, beta) do
@@ -186,29 +199,18 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
   defp search_moves(board, depth, alpha, beta) do
     alpha_orig = alpha
     moves = ordered_moves(board, depth)
+    in_check? = Utils.in_check?(board)
+    stand = if in_check?, do: nil, else: stand_pat(board)
 
-    {best_score, best_move, _a} =
-      Enum.reduce_while(moves, {@neg_inf, nil, alpha}, fn mv, {bs, bm, a} ->
+    {best_score, best_move, _a, _} =
+      Enum.reduce_while(moves, {@neg_inf, nil, alpha, 0}, fn mv, {bs, bm, a, idx} ->
         if SearchControl.aborting?() do
-          {:halt, {bs, bm, a}}
+          {:halt, {bs, bm, a, idx}}
         else
-          case Board.move(board, mv) do
-            %Board{} = nb ->
-              {s, _} = negamax_tt(nb, depth - 1, -beta, -a)
-              s = -s
-              new_bs = max(bs, s)
-              new_bm = if s > bs, do: mv, else: bm
-              new_a = max(a, s)
-
-              if new_a >= beta do
-                :ets.insert(@killer_table, {depth, mv})
-                {:halt, {new_bs, new_bm, new_a}}
-              else
-                {:cont, {new_bs, new_bm, new_a}}
-              end
-
-            _ ->
-              {:cont, {bs, bm, a}}
+          if futile_quiet?(board, mv, depth, a, in_check?, stand) do
+            {:cont, {bs, bm, a, idx + 1}}
+          else
+            search_one(board, mv, depth, beta, bs, bm, a, idx, in_check?)
           end
         end
       end)
@@ -226,6 +228,63 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
 
     {best_score, apply_move(board, best_move)}
   end
+
+  defp search_one(board, mv, depth, beta, bs, bm, a, idx, in_check?) do
+    case Board.move(board, mv) do
+      %Board{} = nb ->
+        gives_check? = Utils.in_check?(nb)
+        child = child_depth(depth, idx, mv, board, in_check?, gives_check?)
+        {s, _} = negamax_tt(nb, child, -beta, -a)
+        s = -s
+
+        s =
+          if child < depth - 1 and s > a do
+            {s2, _} = negamax_tt(nb, depth - 1, -beta, -a)
+            -s2
+          else
+            s
+          end
+
+        new_bs = max(bs, s)
+        new_bm = if s > bs, do: mv, else: bm
+        new_a = max(a, s)
+
+        if new_a >= beta do
+          ensure_killer_table()
+          :ets.insert(@killer_table, {depth, mv})
+          {:halt, {new_bs, new_bm, new_a, idx + 1}}
+        else
+          {:cont, {new_bs, new_bm, new_a, idx + 1}}
+        end
+
+      _ ->
+        {:cont, {bs, bm, a, idx + 1}}
+    end
+  end
+
+  defp child_depth(depth, idx, mv, board, in_check?, gives_check?) do
+    base = depth - 1
+
+    if reduce_late?(depth, idx, mv, board, in_check?, gives_check?) do
+      max(base - 1, 0)
+    else
+      base
+    end
+  end
+
+  defp reduce_late?(depth, idx, mv, board, in_check?, gives_check?) do
+    depth >= @lmr_min_depth and idx >= @lmr_min_move and not in_check? and not gives_check? and
+      byte_size(mv) == 4 and not capture_move?(board, mv)
+  end
+
+  defp futile_quiet?(_board, _mv, _depth, _alpha, true, _stand), do: false
+  defp futile_quiet?(_board, <<_::32, _::8>>, _depth, _alpha, _in_check?, _stand), do: false
+
+  defp futile_quiet?(board, mv, depth, alpha, false, stand) when depth <= 1 and is_number(stand) do
+    not capture_move?(board, mv) and stand + @futility_margin < alpha
+  end
+
+  defp futile_quiet?(_, _, _, _, _, _), do: false
 
   defp apply_move(board, move) when is_binary(move) do
     case Board.move(board, move) do
