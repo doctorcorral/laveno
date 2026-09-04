@@ -603,7 +603,7 @@ defmodule Laveno.Board.Utils do
 
   def generate_moves(board = %{active_color: <<0::1>>}) do
     # Only keep moves that do not leave white king in check
-    moves_for_pieces(board, @w_pieces)
+    (moves_for_pieces(board, @w_pieces) ++ castle_moves(board))
     |> expand_promotions(board)
     |> Enum.filter(fn move ->
       case Board.move(board, move) do
@@ -619,7 +619,7 @@ defmodule Laveno.Board.Utils do
 
   def generate_moves(board = %{active_color: <<1::1>>}) do
     # Only keep moves that do not leave black king in check
-    moves_for_pieces(board, @b_pieces)
+    (moves_for_pieces(board, @b_pieces) ++ castle_moves(board))
     |> expand_promotions(board)
     |> Enum.filter(fn move ->
       case Board.move(board, move) do
@@ -630,6 +630,13 @@ defmodule Laveno.Board.Utils do
           false
       end
     end)
+  end
+
+  # King move masks are one square; castling must be injected separately
+  # so the engine can play O-O / O-O-O in tournament games.
+  defp castle_moves(board) do
+    ["e1g1", "e1c1", "e8g8", "e8c8"]
+    |> Enum.filter(&valid_move?(board, &1))
   end
 
   def union_mask(%{bb: bb}, pieces) do

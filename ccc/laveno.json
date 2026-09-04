@@ -1,0 +1,11 @@
+{
+  "command": "/engines/laveno/laveno",
+  "timemargin": 1000,
+  "options": {
+    "Threads": 8,
+    "Hash": 4096,
+    "Ponder": false,
+    "Move Overhead": 80,
+    "SyzygyPath": "/data/tablebases"
+  }
+}
