@@ -6,8 +6,8 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
   alias Laveno.Board
   alias Laveno.Board.See
   alias Laveno.Board.Utils
+  alias Laveno.Evaluation.Evaluator
   alias Laveno.Evaluation.Material
-  alias Laveno.Evaluation.Placement
   alias Laveno.SearchControl
 
   @neg_inf -1_000_000
@@ -256,7 +256,7 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
   end
 
   defp stand_pat(board) do
-    score = Material.eval(board) + Placement.eval(board)
+    score = Evaluator.static(board)
     if board.active_color == <<0::1>>, do: score, else: -score
   end
 
@@ -322,7 +322,8 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
         _ -> base
       end
 
-    {captures, others} = Enum.split_with(base, &capture_move?(board, &1))
+    {promos, rest} = Enum.split_with(base, &(byte_size(&1) == 5))
+    {captures, others} = Enum.split_with(rest, &capture_move?(board, &1))
 
     captures_sorted =
       Enum.sort_by(
@@ -343,7 +344,7 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
       end
 
     others = if killer in others, do: [killer | List.delete(others, killer)], else: others
-    captures_sorted ++ others
+    promos ++ captures_sorted ++ others
   end
 
   defp position_key(board) do

@@ -1,17 +1,15 @@
 defmodule Laveno.Evaluation.Evaluator do
+  alias Laveno.Evaluation.Check
+  alias Laveno.Evaluation.KingSafety
   alias Laveno.Evaluation.Material
   alias Laveno.Evaluation.Placement
-  alias Laveno.Evaluation.Check
 
   def eval(board) do
-    evaluators = [
-      &Material.eval/1,
-      &Placement.eval/1,
-      &Check.eval/1
-    ]
+    static(board) + Check.eval(board)
+  end
 
-    Enum.reduce(evaluators, 0, fn evaluator, acc_eval ->
-      acc_eval + evaluator.(board)
-    end)
+  @doc "Material + placement + king safety, without the check/mate probe."
+  def static(board) do
+    Material.eval(board) + Placement.eval(board) + KingSafety.eval(board)
   end
 end
