@@ -44,6 +44,8 @@ defmodule Laveno.Board do
     }
   end
 
+  def clear_castles(board), do: %{board | castles: <<0::size(4)>>}
+
   def place_piece(board, piece, square) do
     Map.put(board, :bb, Utils.place_piece(board, piece, square))
   end
@@ -56,57 +58,74 @@ defmodule Laveno.Board do
     Map.put(board, :moves, moves ++ [move])
   end
 
-  # Special-case castling moves to move both king and rook and clear castling rights
+  # Special-case castling only when the king and rook are still on the home squares.
+  # Otherwise fall through so a two-square king walk is not forced as O-O / O-O-O.
   def move(board = %__MODULE__{}, <<"e1g1">> = move) do
-    board
-    |> proc_castle(:K)
-    |> clear_square("e1")
-    |> clear_square("h1")
-    |> place_piece(:K, "g1")
-    |> place_piece(:R, "f1")
-    |> proc_en_passant(:K, move)
-    |> increment_count()
-    |> flip_active_color()
-    |> log_move(move)
+    if Utils.which_piece?(board, "e1") == :K and Utils.which_piece?(board, "h1") == :R do
+      board
+      |> proc_castle(:K)
+      |> clear_square("e1")
+      |> clear_square("h1")
+      |> place_piece(:K, "g1")
+      |> place_piece(:R, "f1")
+      |> proc_en_passant(:K, move)
+      |> increment_count()
+      |> flip_active_color()
+      |> log_move(move)
+    else
+      do_normal_move(board, move)
+    end
   end
 
   def move(board = %__MODULE__{}, <<"e1c1">> = move) do
-    board
-    |> proc_castle(:K)
-    |> clear_square("e1")
-    |> clear_square("a1")
-    |> place_piece(:K, "c1")
-    |> place_piece(:R, "d1")
-    |> proc_en_passant(:K, move)
-    |> increment_count()
-    |> flip_active_color()
-    |> log_move(move)
+    if Utils.which_piece?(board, "e1") == :K and Utils.which_piece?(board, "a1") == :R do
+      board
+      |> proc_castle(:K)
+      |> clear_square("e1")
+      |> clear_square("a1")
+      |> place_piece(:K, "c1")
+      |> place_piece(:R, "d1")
+      |> proc_en_passant(:K, move)
+      |> increment_count()
+      |> flip_active_color()
+      |> log_move(move)
+    else
+      do_normal_move(board, move)
+    end
   end
 
   def move(board = %__MODULE__{}, <<"e8g8">> = move) do
-    board
-    |> proc_castle(:k)
-    |> clear_square("e8")
-    |> clear_square("h8")
-    |> place_piece(:k, "g8")
-    |> place_piece(:r, "f8")
-    |> proc_en_passant(:k, move)
-    |> increment_count()
-    |> flip_active_color()
-    |> log_move(move)
+    if Utils.which_piece?(board, "e8") == :k and Utils.which_piece?(board, "h8") == :r do
+      board
+      |> proc_castle(:k)
+      |> clear_square("e8")
+      |> clear_square("h8")
+      |> place_piece(:k, "g8")
+      |> place_piece(:r, "f8")
+      |> proc_en_passant(:k, move)
+      |> increment_count()
+      |> flip_active_color()
+      |> log_move(move)
+    else
+      do_normal_move(board, move)
+    end
   end
 
   def move(board = %__MODULE__{}, <<"e8c8">> = move) do
-    board
-    |> proc_castle(:k)
-    |> clear_square("e8")
-    |> clear_square("a8")
-    |> place_piece(:k, "c8")
-    |> place_piece(:r, "d8")
-    |> proc_en_passant(:k, move)
-    |> increment_count()
-    |> flip_active_color()
-    |> log_move(move)
+    if Utils.which_piece?(board, "e8") == :k and Utils.which_piece?(board, "a8") == :r do
+      board
+      |> proc_castle(:k)
+      |> clear_square("e8")
+      |> clear_square("a8")
+      |> place_piece(:k, "c8")
+      |> place_piece(:r, "d8")
+      |> proc_en_passant(:k, move)
+      |> increment_count()
+      |> flip_active_color()
+      |> log_move(move)
+    else
+      do_normal_move(board, move)
+    end
   end
 
   # Special-case pawn promotion moves with explicit promotion piece
@@ -130,10 +149,10 @@ defmodule Laveno.Board do
       end
 
       board
+      |> update_castling_rights(piece, from_square, to_square)
       |> clear_square(from_square)
       |> clear_square(to_square)
       |> place_piece(promo_piece, to_square)
-      |> proc_castle(piece)
       |> proc_en_passant(piece, move)
       |> reset_halfmove_clock()
       |> flip_active_color()
@@ -144,23 +163,29 @@ defmodule Laveno.Board do
   end
 
   def move(
-        board = %__MODULE__{bb: bb},
-        move = <<c1::size(8), r1::size(8), c2::size(8), r2::size(8)>>
+        board = %__MODULE__{bb: _bb},
+        move = <<_c1::size(8), _r1::size(8), _c2::size(8), _r2::size(8)>>
       ) do
+    do_normal_move(board, move)
+  end
+
+  defp do_normal_move(
+         board,
+         move = <<c1::size(8), r1::size(8), c2::size(8), r2::size(8)>>
+       ) do
     with true <- Utils.valid_move?(board, move),
          from_square <- <<c1::8, r1::8>>,
          to_square <- <<c2::8, r2::8>>,
          piece <- Utils.which_piece?(board, from_square),
          true <- right_turn?(board, piece) do
-      # Check if this is a capture or pawn move
       is_capture = Utils.which_piece?(board, to_square) != nil
       is_pawn_move = piece in [:P, :p]
 
       board
+      |> update_castling_rights(piece, from_square, to_square)
       |> clear_square(from_square)
       |> clear_square(to_square)
       |> place_piece(piece, to_square)
-      |> proc_castle(piece)
       |> proc_en_passant(piece, move)
       |> (if is_pawn_move or is_capture, do: &reset_halfmove_clock/1, else: &increment_count/1).()
       |> flip_active_color()
@@ -205,6 +230,44 @@ defmodule Laveno.Board do
   end
 
   def proc_castle(board, _), do: board
+
+  # Clear the matching rights when a rook moves or a rook is captured.
+  defp update_castling_rights(board, piece, from, to) do
+    board
+    |> proc_castle(piece)
+    |> clear_rook_rights(piece, from)
+    |> clear_rights_on_square(to)
+  end
+
+  defp clear_rook_rights(board, :R, "a1"), do: clear_castle(board, "Q")
+  defp clear_rook_rights(board, :R, "h1"), do: clear_castle(board, "K")
+  defp clear_rook_rights(board, :r, "a8"), do: clear_castle(board, "q")
+  defp clear_rook_rights(board, :r, "h8"), do: clear_castle(board, "k")
+  defp clear_rook_rights(board, _, _), do: board
+
+  defp clear_rights_on_square(board, "a1"), do: clear_castle(board, "Q")
+  defp clear_rights_on_square(board, "h1"), do: clear_castle(board, "K")
+  defp clear_rights_on_square(board, "a8"), do: clear_castle(board, "q")
+  defp clear_rights_on_square(board, "h8"), do: clear_castle(board, "k")
+  defp clear_rights_on_square(board, _), do: board
+
+  def clear_castle(%{castles: <<_k::1, q::1, kq::2>>} = board, "K") do
+    %{board | castles: <<0::1, q::1, kq::2>>}
+  end
+
+  def clear_castle(%{castles: <<k::1, _q::1, kq::2>>} = board, "Q") do
+    %{board | castles: <<k::1, 0::1, kq::2>>}
+  end
+
+  def clear_castle(%{castles: <<kq::2, _k::1, q::1>>} = board, "k") do
+    %{board | castles: <<kq::2, 0::1, q::1>>}
+  end
+
+  def clear_castle(%{castles: <<kqk::3, _q::1>>} = board, "q") do
+    %{board | castles: <<kqk::3, 0::1>>}
+  end
+
+  def clear_castle(board, _), do: board
 
   def proc_en_passant(
         board,

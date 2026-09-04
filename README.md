@@ -7,6 +7,9 @@ It has UCI support, which enables using a chess GUI to interact with the engine.
 
 Laveno exposes a handy API for each of it's components.
 
+Tournament packaging for **TCEC** and **Chess.com CCC** lives in
+[TOURNAMENTS.md](TOURNAMENTS.md).
+
 ## How to play
 
 ```sh
@@ -23,15 +26,8 @@ go wtime 1000 btime 1000 winc 0 binc 0
 quit
 ' | ./laveno | cat
 ```
-you should see
-```sh
-id name laveno.one 0.2.0
-id author Corral-Corral, Ricardo
-uciok
-readyok
-info depth 2 score cp -1 nodes 0 time 0 pv c7c5
-bestmove c7c5
-```
+you should see `id name Laveno`, the UCI option list, `uciok`, `readyok`,
+an `info` line with a centipawn score, and `bestmove` with a legal move.
 
 ## Correspondence Games
 
@@ -75,7 +71,7 @@ by adding `laveno` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:laveno, "~> 0.3.0"}
+    {:laveno, "~> 0.4.0"}
   ]
 end
 ```

@@ -57,6 +57,19 @@ defmodule LavenoTest.FenTest do
   end
 
   describe "Tactics FEN :" do
+    test "FEN en passant on the h-file" do
+      fen = "rnbqkbnr/ppppppp1/8/7p/8/8/PPPPPPPP/RNBQKBNR w KQkq h6 0 2"
+      {_fen_state, board} = Fen.load(fen)
+      assert Utils.which_piece?(board, "h5") == :p
+      assert board.en_passant == "h6"
+    end
+
+    test "FEN with no castling rights starts from zero" do
+      fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1"
+      {_fen_state, board} = Fen.load(fen)
+      assert board.castles == <<0::4>>
+    end
+
     test "FEN just a tactic position. Nd6#" do
       fen = "1b1B1Nb1/rRqp1kPp/1p5P/8/2N2Pp1/p3R3/B3Q3/2K5"
 

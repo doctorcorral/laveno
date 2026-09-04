@@ -1,142 +1,143 @@
 defmodule Laveno.Fen do
+  @moduledoc """
+  Parse Forsyth–Edwards Notation used by UCI `position fen` commands.
+
+  TCEC and CCC opening books always send a FEN (often with partial or no
+  castling rights, and en passant on any file including g and h). The previous
+  character-by-character loader started from a board that already had all
+  castling rights set and only recognized en-passant files a–f.
+  """
   alias Laveno.Board
 
-  @column_list ["a", "b", "c", "d", "e", "f"]
-  @rank_list ["1", "2", "3", "4", "5", "6", "7", "8"]
+  @start_fen "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
-  def new_state() do
+  def new_state do
     %{
-      step: 1,
-      rank: 8,
-      column: 1,
-      square: "a8",
+      fen: @start_fen,
       active_color: "w",
-      castlig: %{
-        "K" => true,
-        "Q" => true,
-        "k" => true,
-        "q" => true
-      },
+      castling: "-",
       en_passant_target_square: "-",
-      col_passant: "",
-      rank_passant: "",
-      fullmove_number: 1,
-      halfmove_clock: 0
+      halfmove_clock: 0,
+      fullmove_number: 1
     }
   end
 
-  def load(fen_string) do
-    fen_string
-    |> String.graphemes()
-    |> Enum.reduce(
-      {new_state(), Board.new(:empty)},
-      fn symbol, {fen_state, board} ->
-        apply_symbol(symbol, {fen_state, board})
-      end
-    )
-  end
+  @doc "Load a FEN string. Extra tokens after the six fields (e.g. `moves`) are ignored."
+  def load(fen_string) when is_binary(fen_string) do
+    fields =
+      fen_string
+      |> String.trim()
+      |> String.split(~r/\s+/, parts: 6)
 
-  def apply_symbol(" ", {%{step: 1} = fen_state, board}) do
-    {%{fen_state | step: 2}, board}
-  end
+    placement = Enum.at(fields, 0, "")
+    active = Enum.at(fields, 1, "w")
+    castling = Enum.at(fields, 2, "-")
+    ep = Enum.at(fields, 3, "-")
+    half = parse_int(Enum.at(fields, 4), 0)
+    full = parse_int(Enum.at(fields, 5), 1)
 
-  def apply_symbol(active_color, {%{step: 2} = fen_state, board})
-      when active_color in ["w", "b"] do
-    #    IO.inspect(active_color, label: "SETTING ACTIVE COLOR")
+    board =
+      Board.new(:empty)
+      |> Board.clear_castles()
+      |> apply_placement(placement)
+      |> Board.set_active_color(normalize_color(active))
+      |> apply_castling(castling)
+      |> apply_en_passant(ep)
+      |> Map.put(:halfmove_clock, rem(max(half, 0), 2))
+      |> Map.put(:fullmove_number, max(full, 1))
 
-    {
-      %{fen_state | step: 3, active_color: active_color},
-      board |> Board.set_active_color(active_color)
+    state = %{
+      fen: String.trim(fen_string),
+      active_color: normalize_color(active),
+      castling: castling,
+      en_passant_target_square: ep,
+      halfmove_clock: half,
+      fullmove_number: full
     }
+
+    {state, board}
   end
 
-  def apply_symbol(castle_letter, {%{step: step} = fen_state, board})
-      when castle_letter in ["K", "Q", "k", "q"] and step in [3, 4] do
-    #    IO.inspect(castle_letter, label: "SETTING A CASTLE")
-    {%{fen_state | step: 4}, board |> Board.set_castle(castle_letter)}
+  defp normalize_color("b"), do: "b"
+  defp normalize_color("B"), do: "b"
+  defp normalize_color(_), do: "w"
+
+  defp parse_int(nil, default), do: default
+
+  defp parse_int(str, default) do
+    case Integer.parse(to_string(str)) do
+      {n, _} -> n
+      :error -> default
+    end
   end
 
-  def apply_symbol("-", {%{step: 4} = fen_state, board}) do
-    #   IO.inspect("-", label: "NO EN PASSANT")
-    {%{fen_state | step: 5}, board}
+  defp apply_placement(board, placement) do
+    placement
+    |> String.split("/")
+    |> Enum.take(8)
+    |> Enum.with_index()
+    |> Enum.reduce(board, fn {rank_str, idx}, acc ->
+      apply_rank(acc, rank_str, 8 - idx)
+    end)
   end
 
-  def apply_symbol(col_passant, {%{step: 4} = fen_state, board})
-      when col_passant in @column_list do
-    #  IO.inspect(col_passant, label: "COL PASSANT")
-    {%{fen_state | col_passant: col_passant}, board}
-  end
+  defp apply_rank(board, rank_str, rank) do
+    {board, _file} =
+      rank_str
+      |> String.graphemes()
+      |> Enum.reduce({board, 0}, fn ch, {acc, file} ->
+        cond do
+          ch in ~w(1 2 3 4 5 6 7 8) ->
+            {acc, file + String.to_integer(ch)}
 
-  def apply_symbol(rank_passant, {%{step: 4} = fen_state, board})
-      when rank_passant in @rank_list do
-    # IO.inspect(rank_passant, label: "RANK PASSANT")
-    {%{fen_state | rank_passant: rank_passant, step: 5}, board}
-  end
+          file > 7 ->
+            {acc, file}
 
-  def apply_symbol(" ", {%{step: 5} = fen_state, board}) do
-    {fen_state, board}
-  end
-
-  def apply_symbol(halfmove_clock, {%{step: 5} = fen_state, board}) do
-    #    IO.inspect(halfmove_clock, label: "HALFMOVE CLOCK")
-    {%{fen_state | step: 6, halfmove_clock: halfmove_clock}, board}
-  end
-
-  def apply_symbol(" ", {%{step: 6} = fen_state, board}) do
-    {fen_state, board}
-  end
-
-  def apply_symbol(fullmove_number, {%{step: 6} = fen_state, board}) do
-    #   IO.inspect(fullmove_number, label: "FULLMOVE NUMBER")
-    {%{fen_state | step: 7, fullmove_number: fullmove_number}, board}
-  end
-
-  def apply_symbol("/", {%{rank: rank} = fen_state, board}) do
-    {%{fen_state | rank: rank - 1}, board}
-  end
-
-  def apply_symbol(symbol, {
-        %{step: 1, square: square} = fen_state,
-        board
-      })
-      when symbol in @rank_list do
-    new_fen_state =
-      Enum.reduce(
-        1..String.to_integer(symbol),
-        fen_state,
-        fn _, fen_acc ->
-          fen_acc |> next_square()
+          true ->
+            square = <<(?a + file), (?0 + rank)>>
+            {Board.place_piece(acc, String.to_atom(ch), square), file + 1}
         end
-      )
+      end)
 
-    {new_fen_state, board}
+    board
   end
 
-  def apply_symbol(symbol, {
-        %{step: 1, square: square} = fen_state,
+  # Standard KQkq plus Shredder-FEN A/H (standard rook files) so book FENs
+  # that use Chess960-style letters for a classical setup still load.
+  defp apply_castling(board, "-"), do: board
+
+  defp apply_castling(board, rights) do
+    rights
+    |> String.graphemes()
+    |> Enum.reduce(board, fn letter, acc ->
+      case letter do
+        l when l in ["K", "Q", "k", "q"] -> Board.set_castle(acc, l)
+        "H" -> Board.set_castle(acc, "K")
+        "A" -> Board.set_castle(acc, "Q")
+        "h" -> Board.set_castle(acc, "k")
+        "a" -> Board.set_castle(acc, "q")
+        _ -> acc
+      end
+    end)
+  end
+
+  defp apply_en_passant(board, "-"), do: board
+  defp apply_en_passant(board, ""), do: board
+
+  defp apply_en_passant(board, <<file::8, rank::8>>)
+       when file >= ?a and file <= ?h and rank >= ?1 and rank <= ?8 do
+    Board.set_en_passant(board, <<file, rank>>)
+  end
+
+  defp apply_en_passant(board, ep) when is_binary(ep) do
+    case String.downcase(ep) do
+      <<file::8, rank::8>> when file >= ?a and file <= ?h and rank >= ?1 and rank <= ?8 ->
+        Board.set_en_passant(board, <<file, rank>>)
+
+      _ ->
         board
-      }) do
-    #  IO.inspect({symbol, square}, label: "PLACING PIECE")
-
-    with updated_board <-
-           board
-           |> Board.place_piece(String.to_atom(symbol), square),
-         updated_fen_state <-
-           fen_state
-           |> next_square() do
-      {updated_fen_state, updated_board}
     end
   end
 
-  def apply_symbol(symbol, states) do
-    #    IO.inspect(symbol, label: "APPLYING")
-    states
-  end
-
-  def next_square(%{square: <<c::size(8), r::size(8)>>} = fen_state) do
-    case c do
-      104 -> %{fen_state | square: <<97::8, r - 1::8>>}
-      col -> %{fen_state | square: <<col + 1::8, r::8>>}
-    end
-  end
+  defp apply_en_passant(board, _), do: board
 end

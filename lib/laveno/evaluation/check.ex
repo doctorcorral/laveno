@@ -14,19 +14,15 @@ defmodule Laveno.Evaluation.Check do
   - zero otherwise.
   """
   def eval(board) do
-    legal_moves = Utils.generate_moves(board)
-
-    cond do
-      legal_moves == [] and Utils.in_check?(board) ->
-        # side to move is in checkmate
+    # generate_moves is expensive; only expand when the king is already in check
+    if Utils.in_check?(board) do
+      if Utils.generate_moves(board) == [] do
         if board.active_color == <<0::1>>, do: -@checkmate_bonus, else: @checkmate_bonus
-
-      Utils.in_check?(board) ->
-        # side to move is in check
+      else
         if board.active_color == <<0::1>>, do: -@check_bonus, else: @check_bonus
-
-      true ->
-        0
+      end
+    else
+      0
     end
   end
 end

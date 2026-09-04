@@ -6,3 +6,6 @@
 /priv/repo/migrations/*.exs
 /*.ez
 /laveno
+/crash.log
+/commands.log
+/vendor
