@@ -3,6 +3,7 @@ defmodule Laveno.Board.Utils do
   require Logger
 
   alias Laveno.Board
+  alias Laveno.Board.Attacks
   alias Laveno.Board.Maps
 
   @typedoc """
@@ -19,7 +20,7 @@ defmodule Laveno.Board.Utils do
   which is given by the bits 00100100 ~ 36
   """
   @type board :: Board.t()
-  @type bitboard() :: <<_::64>>
+  @type bitboard() :: non_neg_integer() | <<_::64>>
 
   @typedoc """
   Unsigned integer representation of a bitboard
@@ -61,64 +62,46 @@ defmodule Laveno.Board.Utils do
 
   def initial_position_binary() do
     %{
-      P: <<0::8, 255::8, 0::48>>,
-      p: <<0::48, 255::8, 0::8>>,
-      N: <<0::1, 1::1, 0::4, 1::1, 0::57>>,
-      n: <<0::57, 1::1, 0::4, 1::1, 0::1>>,
-      B: <<0::2, 1::1, 0::2, 1::1, 0::58>>,
-      b: <<0::58, 1::1, 0::2, 1::1, 0::2>>,
-      Q: <<0::3, 1::1, 0::60>>,
-      q: <<0::59, 1::1, 0::4>>,
-      K: <<0::4, 1::1, 0::59>>,
-      k: <<0::60, 1::1, 0::3>>,
-      R: <<1::1, 0::6, 1::1, 0::56>>,
-      r: <<0::56, 1::1, 0::6, 1::1>>
+      P: Attacks.as_int(<<0::8, 255::8, 0::48>>),
+      p: Attacks.as_int(<<0::48, 255::8, 0::8>>),
+      N: Attacks.as_int(<<0::1, 1::1, 0::4, 1::1, 0::57>>),
+      n: Attacks.as_int(<<0::57, 1::1, 0::4, 1::1, 0::1>>),
+      B: Attacks.as_int(<<0::2, 1::1, 0::2, 1::1, 0::58>>),
+      b: Attacks.as_int(<<0::58, 1::1, 0::2, 1::1, 0::2>>),
+      Q: Attacks.as_int(<<0::3, 1::1, 0::60>>),
+      q: Attacks.as_int(<<0::59, 1::1, 0::4>>),
+      K: Attacks.as_int(<<0::4, 1::1, 0::59>>),
+      k: Attacks.as_int(<<0::60, 1::1, 0::3>>),
+      R: Attacks.as_int(<<1::1, 0::6, 1::1, 0::56>>),
+      r: Attacks.as_int(<<0::56, 1::1, 0::6, 1::1>>)
     }
   end
 
   def empty_position_binary() do
     %{
-      P: <<0::64>>,
-      p: <<0::64>>,
-      N: <<0::64>>,
-      n: <<0::64>>,
-      B: <<0::64>>,
-      b: <<0::64>>,
-      Q: <<0::64>>,
-      q: <<0::64>>,
-      K: <<0::64>>,
-      k: <<0::64>>,
-      R: <<0::64>>,
-      r: <<0::64>>
+      P: 0,
+      p: 0,
+      N: 0,
+      n: 0,
+      B: 0,
+      b: 0,
+      Q: 0,
+      q: 0,
+      K: 0,
+      k: 0,
+      R: 0,
+      r: 0
     }
   end
 
-  #  @sec place_piece(board, piece_atom, square_algebraic_notation()) :: board
-  def place_piece(%{bb: bitboard}, piece, square = <<c::size(8), r::size(8)>>) do
+  def place_piece(%{bb: bitboard}, piece, <<c::size(8), r::size(8)>>) do
     {_row, _column, offset} = rco(r, c)
-    existing_piece_bb_decoded = bitboard[piece] |> :binary.decode_unsigned()
-    new_piece_bb_decoded = <<1 <<< offset::64>> |> :binary.decode_unsigned()
-    updated_bb = existing_piece_bb_decoded ||| new_piece_bb_decoded
-    Map.update(bitboard, piece, <<0::64>>, fn bb -> <<updated_bb::64>> end)
+    Map.update(bitboard, piece, 0, fn bb -> Attacks.as_int(bb) ||| 1 <<< offset end)
   end
 
-  def remove_piece(
-        %{bb: bitboard},
-        piece,
-        <<c::size(8), r::size(8)>>
-      ) do
+  def remove_piece(%{bb: bitboard}, piece, <<c::size(8), r::size(8)>>) do
     {_row, _column, offset} = rco(r, c)
-    existing_piece_bb_decoded = bitboard[piece] |> :binary.decode_unsigned()
-    no_piece_bb_decoded = <<1 <<< offset::64>> |> :binary.decode_unsigned()
-    updated_bb = existing_piece_bb_decoded - no_piece_bb_decoded
-
-    new_bitboard =
-      Map.update(
-        bitboard,
-        piece,
-        <<0::64>>,
-        fn bb -> <<updated_bb::64>> end
-      )
+    Map.update(bitboard, piece, 0, fn bb -> Attacks.as_int(bb) &&& ~~~(1 <<< offset) end)
   end
 
   def clear_square(board = %{bb: bitboard}, square = <<c::size(8), r::size(8)>>) do
@@ -249,17 +232,14 @@ defmodule Laveno.Board.Utils do
   end
 
   def which_piece?(
-        board = %{bb: bb},
+        %{bb: bb},
         offset_to_square
       ) do
-    mask =
-      <<1 <<< offset_to_square::size(64)>>
-      |> :binary.decode_unsigned()
+    mask = 1 <<< offset_to_square
 
-    Enum.find(
-      @pieces_set,
-      &((bb[&1] |> :binary.decode_unsigned() &&& mask) != 0)
-    )
+    Enum.find(@pieces_set, fn piece ->
+      (Attacks.as_int(bb[piece]) &&& mask) != 0
+    end)
   end
 
   def inbound?(
@@ -352,62 +332,58 @@ defmodule Laveno.Board.Utils do
   Validate a move using file/rank geometry and path clearance
   """
   def valid_move?(board = %{castles: <<1::1, _::3>>}, <<"e1g1">>) do
-    # require a white king on e1 and a white rook on h1
     if which_piece?(board, "e1") != :K or which_piece?(board, "h1") != :R do
       false
     else
-      occ    = occupancy_mask(board)
-      empty  = square_mask("f1") ||| square_mask("g1")
-      attack = attack_mask(board, @b_pieces)
-      # mask for e1,f1,g1 bitboard = square_mask("e1") ||| square_mask("f1") ||| square_mask("g1")
-      mask_e1_f1_g1 = 0x0E00000000000000
+      occ = occupancy_mask(board)
+      empty = square_mask("f1") ||| square_mask("g1")
+
       (occ &&& empty) == 0 and
-      (attack &&& mask_e1_f1_g1) == 0
+        not square_attacked_by?(board, "e1", :black) and
+        not square_attacked_by?(board, "f1", :black) and
+        not square_attacked_by?(board, "g1", :black)
     end
   end
 
-  def valid_move?(board = %{castles: <<_::1,1::1,_::2>>}, <<"e1c1">>) do
-    # require a white king on e1 and a white rook on a1
+  def valid_move?(board = %{castles: <<_::1, 1::1, _::2>>}, <<"e1c1">>) do
     if which_piece?(board, "e1") != :K or which_piece?(board, "a1") != :R do
       false
     else
-      occ    = occupancy_mask(board)
-      empty  = square_mask("d1") ||| square_mask("c1") ||| square_mask("b1")
-      attack = attack_mask(board, @b_pieces)
-      # mask for e1,d1,c1 bitboard = square_mask("e1") ||| square_mask("d1") ||| square_mask("c1")
-      mask_e1_d1_c1 = 0x3800000000000000
+      occ = occupancy_mask(board)
+      empty = square_mask("d1") ||| square_mask("c1") ||| square_mask("b1")
+
       (occ &&& empty) == 0 and
-      (attack &&& mask_e1_d1_c1) == 0
+        not square_attacked_by?(board, "e1", :black) and
+        not square_attacked_by?(board, "d1", :black) and
+        not square_attacked_by?(board, "c1", :black)
     end
   end
 
-  def valid_move?(board = %{castles: <<_::2,1::1,_::1>>}, <<"e8g8">>) do
-    # require a black king on e8 and a black rook on h8
+  def valid_move?(board = %{castles: <<_::2, 1::1, _::1>>}, <<"e8g8">>) do
     if which_piece?(board, "e8") != :k or which_piece?(board, "h8") != :r do
       false
     else
-      occ    = occupancy_mask(board)
-      empty  = square_mask("f8") ||| square_mask("g8")
-      attack = attack_mask(board, @w_pieces)
-      # mask for e8,f8,g8 bitboard = square_mask("e8") ||| square_mask("f8") ||| square_mask("g8")
-      mask_e8_f8_g8 = 0x0E
+      occ = occupancy_mask(board)
+      empty = square_mask("f8") ||| square_mask("g8")
+
       (occ &&& empty) == 0 and
-      (attack &&& mask_e8_f8_g8) == 0
+        not square_attacked_by?(board, "e8", :white) and
+        not square_attacked_by?(board, "f8", :white) and
+        not square_attacked_by?(board, "g8", :white)
     end
   end
 
-  def valid_move?(board = %{castles: <<_::3,1::1>>}, <<"e8c8">>) do
-    # require a black king on e8 and a black rook on a1? a8
+  def valid_move?(board = %{castles: <<_::3, 1::1>>}, <<"e8c8">>) do
     if which_piece?(board, "e8") != :k or which_piece?(board, "a8") != :r do
       false
     else
-      occ    = occupancy_mask(board)
-      empty  = square_mask("d8") ||| square_mask("c8") ||| square_mask("b8")
-      attack = attack_mask(board, @w_pieces)
-      # mask for e8,d8,c8 bitboard = square_mask("e8") ||| square_mask("d8") ||| square_mask("c8")
-      mask_e8_d8_c8 = 0x38
+      occ = occupancy_mask(board)
+      empty = square_mask("d8") ||| square_mask("c8") ||| square_mask("b8")
+
       (occ &&& empty) == 0 and
-      (attack &&& mask_e8_d8_c8) == 0
+        not square_attacked_by?(board, "e8", :white) and
+        not square_attacked_by?(board, "d8", :white) and
+        not square_attacked_by?(board, "c8", :white)
     end
   end
 
@@ -536,25 +512,29 @@ defmodule Laveno.Board.Utils do
   defp path_clear_line?(board, file_from, rank_from, file_to, rank_to) do
     df = file_to - file_from
     dr = rank_to - rank_from
-    step_file = cond do
-      df > 0 -> 1
-      df < 0 -> -1
-      true -> 0
-    end
 
-    step_rank = cond do
-      dr > 0 -> 1
-      dr < 0 -> -1
-      true -> 0
-    end
+    step_file =
+      cond do
+        df > 0 -> 1
+        df < 0 -> -1
+        true -> 0
+      end
 
+    step_rank =
+      cond do
+        dr > 0 -> 1
+        dr < 0 -> -1
+        true -> 0
+      end
+
+    occ = occupancy_mask(board)
     max_delta = max(abs(df), abs(dr))
-    # when max_delta < 2, the range is empty
+
     Enum.all?(1..(max_delta - 1)//1, fn i ->
       file = file_from + step_file * i
       rank = rank_from + step_rank * i
-      square = <<(@offset_column + file)::8, (@offset_row + rank)::8>>
-      which_piece?(board, square) == nil
+      offset = 64 - 8 * rank - file - 1
+      (occ &&& 1 <<< offset) == 0
     end)
   end
 
@@ -576,77 +556,32 @@ defmodule Laveno.Board.Utils do
     )
   end
 
-  def where_is(%{bb: %{Q: <<0::64>>}}, :Q), do: []
-  def where_is(%{bb: %{q: <<0::64>>}}, :q), do: []
-  def where_is(%{bb: %{N: <<0::64>>}}, :N), do: []
-  def where_is(%{bb: %{n: <<0::64>>}}, :n), do: []
-  def where_is(%{bb: %{B: <<0::64>>}}, :B), do: []
-  def where_is(%{bb: %{b: <<0::64>>}}, :b), do: []
-  def where_is(%{bb: %{P: <<0::64>>}}, :P), do: []
-  def where_is(%{bb: %{p: <<0::64>>}}, :p), do: []
-  def where_is(%{bb: %{R: <<0::64>>}}, :R), do: []
-  def where_is(%{bb: %{r: <<0::64>>}}, :r), do: []
-
-  def where_is(%{bb: bb}, piece) do
-    Enum.reduce(0..63, [], fn
-      offset, offset_positions ->
-        case :binary.decode_unsigned(<<1 <<< offset::64>>) &&&
-               :binary.decode_unsigned(bb[piece]) do
-          0 ->
-            offset_positions
-
-          _ ->
-            [offset | offset_positions]
-        end
-    end)
-  end
+  def where_is(%{bb: bb}, piece), do: Attacks.bits(bb[piece])
 
   def generate_moves(board = %{active_color: <<0::1>>}) do
-    # Only keep moves that do not leave white king in check
     (moves_for_pieces(board, @w_pieces) ++ castle_moves(board))
-    |> expand_promotions(board)
-    |> Enum.filter(fn move ->
-      case Board.move(board, move) do
-        %Board{} = new_board ->
-          # new_board.active_color is opponent; reset to mover to test king safety
-          board_after = %{new_board | active_color: board.active_color}
-          not in_check?(board_after)
-        _ ->
-          false
-      end
-    end)
+    |> Enum.filter(&king_safe_after?(board, &1))
   end
 
   def generate_moves(board = %{active_color: <<1::1>>}) do
-    # Only keep moves that do not leave black king in check
     (moves_for_pieces(board, @b_pieces) ++ castle_moves(board))
-    |> expand_promotions(board)
-    |> Enum.filter(fn move ->
-      case Board.move(board, move) do
-        %Board{} = new_board ->
-          board_after = %{new_board | active_color: board.active_color}
-          not in_check?(board_after)
-        _ ->
-          false
-      end
-    end)
+    |> Enum.filter(&king_safe_after?(board, &1))
   end
 
   # King move masks are one square; castling must be injected separately
   # so the engine can play O-O / O-O-O in tournament games.
-  defp castle_moves(board) do
-    ["e1g1", "e1c1", "e8g8", "e8c8"]
-    |> Enum.filter(&valid_move?(board, &1))
+  defp castle_moves(%{active_color: <<0::1>>} = board) do
+    Enum.filter(["e1g1", "e1c1"], &valid_move?(board, &1))
+  end
+
+  defp castle_moves(%{active_color: <<1::1>>} = board) do
+    Enum.filter(["e8g8", "e8c8"], &valid_move?(board, &1))
   end
 
   def union_mask(%{bb: bb}, pieces) do
-    Enum.reduce(
-      pieces,
-      :binary.decode_unsigned(<<0::64>>),
-      fn piece, union_bb ->
-        union_bb ||| bb[piece] |> :binary.decode_unsigned()
-      end
-    )
+    Enum.reduce(pieces, 0, fn piece, union_bb ->
+      union_bb ||| Attacks.as_int(bb[piece])
+    end)
   end
 
   def diagonal_path_mask(board, <<c1::size(8), r1::size(8), c2::size(8), r2::size(8)>>) do
@@ -736,32 +671,99 @@ defmodule Laveno.Board.Utils do
   end
 
   def moves_for_pieces(board, pieces) do
-    Enum.map(pieces, fn piece ->
-      Enum.map(where_is(board, piece), fn piece_offset ->
-        with full_moves_mask <- moves(piece, piece_offset),
-             self_union_mask <- union_mask(board, pieces),
-             moves_mask <- full_moves_mask &&& ~~~self_union_mask do
-          Enum.reduce(0..63, [], fn to_offset, acc_moves ->
-            if (:binary.decode_unsigned(<<1 <<< to_offset::64>>) &&& moves_mask) != 0 do
-              sq1 = Maps.offset_to_square(piece_offset)
-              sq2 = Maps.offset_to_square(to_offset)
-              move = sq1 <> sq2
-              # Only block own pieces, allow captures on target
-              if (diagonal_path_mask(board, move) &&& self_union_mask) == 0 and
-                 (linear_path_mask(board, move) &&& self_union_mask) == 0 and
-                 valid_move?(board, move) do
-                [move | acc_moves]
-              else
-                acc_moves
-              end
-            else
-              acc_moves
-            end
-          end)
-        end
+    occ = occupancy_mask(board)
+    own = union_mask(board, pieces)
+    enemy = occ &&& ~~~own
+    ep_bit = ep_bit(board.en_passant)
+
+    Enum.flat_map(pieces, fn piece ->
+      Enum.flat_map(Attacks.bits(board.bb[piece]), fn from ->
+        dests = piece_dests(piece, from, occ, own, enemy, ep_bit)
+        encode_dests(piece, from, dests)
       end)
     end)
-    |> List.flatten()
+  end
+
+  defp ep_bit(<<c::8, r::8>>), do: square_mask(<<c, r>>)
+  defp ep_bit(_), do: 0
+
+  defp piece_dests(:N, from, _occ, own, _enemy, _ep), do: Attacks.knight_attacks(from) &&& ~~~own
+  defp piece_dests(:n, from, _occ, own, _enemy, _ep), do: Attacks.knight_attacks(from) &&& ~~~own
+  defp piece_dests(:K, from, _occ, own, _enemy, _ep), do: Attacks.king_attacks(from) &&& ~~~own
+  defp piece_dests(:k, from, _occ, own, _enemy, _ep), do: Attacks.king_attacks(from) &&& ~~~own
+  defp piece_dests(:B, from, occ, own, _enemy, _ep), do: Attacks.bishop_attacks(from, occ) &&& ~~~own
+  defp piece_dests(:b, from, occ, own, _enemy, _ep), do: Attacks.bishop_attacks(from, occ) &&& ~~~own
+  defp piece_dests(:R, from, occ, own, _enemy, _ep), do: Attacks.rook_attacks(from, occ) &&& ~~~own
+  defp piece_dests(:r, from, occ, own, _enemy, _ep), do: Attacks.rook_attacks(from, occ) &&& ~~~own
+  defp piece_dests(:Q, from, occ, own, _enemy, _ep), do: Attacks.queen_attacks(from, occ) &&& ~~~own
+  defp piece_dests(:q, from, occ, own, _enemy, _ep), do: Attacks.queen_attacks(from, occ) &&& ~~~own
+  defp piece_dests(:P, from, occ, _own, enemy, ep), do: white_pawn_dests(from, occ, enemy, ep)
+  defp piece_dests(:p, from, occ, _own, enemy, ep), do: black_pawn_dests(from, occ, enemy, ep)
+  defp piece_dests(_, _, _, _, _, _), do: 0
+
+  defp white_pawn_dests(from, occ, enemy, ep) do
+    push =
+      if from >= 8 do
+        single = 1 <<< (from - 8)
+
+        if (occ &&& single) == 0 do
+          double =
+            if from >= 48 and from <= 55 and (occ &&& 1 <<< (from - 16)) == 0 do
+              1 <<< (from - 16)
+            else
+              0
+            end
+
+          single ||| double
+        else
+          0
+        end
+      else
+        0
+      end
+
+    push ||| (Attacks.pawn_attacks_white(from) &&& (enemy ||| ep))
+  end
+
+  defp black_pawn_dests(from, occ, enemy, ep) do
+    push =
+      if from <= 55 do
+        single = 1 <<< (from + 8)
+
+        if (occ &&& single) == 0 do
+          double =
+            if from >= 8 and from <= 15 and (occ &&& 1 <<< (from + 16)) == 0 do
+              1 <<< (from + 16)
+            else
+              0
+            end
+
+          single ||| double
+        else
+          0
+        end
+      else
+        0
+      end
+
+    push ||| (Attacks.pawn_attacks_black(from) &&& (enemy ||| ep))
+  end
+
+  defp encode_dests(piece, from, dests) do
+    Enum.flat_map(Attacks.bits(dests), fn to ->
+      move = Maps.offset_to_square(from) <> Maps.offset_to_square(to)
+
+      cond do
+        piece == :P and to <= 7 ->
+          for promo <- [?q, ?r, ?b, ?n], do: move <> <<promo>>
+
+        piece == :p and to >= 56 ->
+          for promo <- [?q, ?r, ?b, ?n], do: move <> <<promo>>
+
+        true ->
+          [move]
+      end
+    end)
   end
 
   def pretty_squares(board, squares) do
@@ -795,33 +797,33 @@ defmodule Laveno.Board.Utils do
   end
 
   @doc """
-  Returns true if the side to move is in check. We generate opponent moves and see if any can capture the king of side to move.
+  Returns true if the side to move is in check.
   """
   def in_check?(board) do
-    # Attacker moves are from the opponent
-    attacker_moves = case board.active_color do
-      <<0::1>> -> moves_for_pieces(board, @b_pieces)
-      <<1::1>> -> moves_for_pieces(board, @w_pieces)
+    {king, by} =
+      case board.active_color do
+        <<0::1>> -> {:K, :black}
+        <<1::1>> -> {:k, :white}
+      end
+
+    case Attacks.bits(board.bb[king]) do
+      [sq | _] -> square_attacked_by?(board, sq, by)
+      [] -> false
     end
+  end
 
-    # Defender king is of side to move
-    defender_king = case board.active_color do
-      <<0::1>> -> :K
-      <<1::1>> -> :k
-    end
+  def square_attacked_by?(board, <<c::8, r::8>>, by) do
+    {_row, _col, offset} = rco(r, c)
+    square_attacked_by?(board, offset, by)
+  end
 
-    # King square(s)
-    king_sqs = where_is(board, defender_king) |> Enum.map(&Maps.offset_to_square/1)
-
-    # If any attacker move targets the king square, it's check
-    Enum.any?(attacker_moves, fn <<_::16, c2::8, r2::8>> ->
-      <<c2, r2>> in king_sqs
-    end)
+  def square_attacked_by?(board, offset, by) when is_integer(offset) do
+    Attacks.attacked?(board.bb, occupancy_mask(board), offset, by)
   end
 
   # Bitboard helper: integer mask for a given square
   def square_mask(<<c::8, r::8>>) do
-    {_,_,off} = rco(r, c)
+    {_r, _c, off} = rco(r, c)
     1 <<< off
   end
 
@@ -832,28 +834,133 @@ defmodule Laveno.Board.Utils do
 
   # Attack mask: all squares attacked by given side pieces
   def attack_mask(board, pieces) do
-    moves_for_pieces(board, pieces)
-    |> Enum.reduce(0, fn <<_::16, c2::8, r2::8>>, mask ->
-      {_,_,off} = rco(r2, c2)
-      mask ||| (1 <<< off)
+    by = if pieces == @w_pieces, do: :white, else: :black
+    occ = occupancy_mask(board)
+
+    Enum.reduce(0..63, 0, fn sq, mask ->
+      if Attacks.attacked?(board.bb, occ, sq, by), do: mask ||| 1 <<< sq, else: mask
     end)
   end
 
-  # Expand simple 4-byte pawn moves that reach last rank into promotion moves
-  defp expand_promotions(moves, board) do
-    Enum.flat_map(moves, fn
-      move = <<c1::8, r1::8, c2::8, r2::8>> ->
-        piece = which_piece?(board, <<c1, r1>>)
-        cond do
-          piece == :P and r2 == ?8 ->
-            for promo <- [?q, ?r, ?b, ?n], do: <<c1::8, r1::8, c2::8, r2::8, promo>>
-          piece == :p and r2 == ?1 ->
-            for promo <- [?q, ?r, ?b, ?n], do: <<c1::8, r1::8, c2::8, r2::8, promo>>
-          true ->
-            [move]
-        end
-      other ->
-        [other]
-    end)
+  defp king_safe_after?(board, move) do
+    {king, by} =
+      case board.active_color do
+        <<0::1>> -> {:K, :black}
+        <<1::1>> -> {:k, :white}
+      end
+
+    bb = apply_pseudo_bb(board, move)
+    occ = occupancy_from_bb(bb)
+
+    case Attacks.bits(bb[king]) do
+      [sq | _] -> not Attacks.attacked?(bb, occ, sq, by)
+      [] -> false
+    end
   end
+
+  defp occupancy_from_bb(bb) do
+    Enum.reduce(@pieces_set, 0, fn piece, acc -> acc ||| Attacks.as_int(bb[piece]) end)
+  end
+
+  defp apply_pseudo_bb(board, <<"e1g1">>) do
+    board.bb
+    |> clear_bit(:K, square_offset("e1"))
+    |> clear_bit(:R, square_offset("h1"))
+    |> set_bit(:K, square_offset("g1"))
+    |> set_bit(:R, square_offset("f1"))
+  end
+
+  defp apply_pseudo_bb(board, <<"e1c1">>) do
+    board.bb
+    |> clear_bit(:K, square_offset("e1"))
+    |> clear_bit(:R, square_offset("a1"))
+    |> set_bit(:K, square_offset("c1"))
+    |> set_bit(:R, square_offset("d1"))
+  end
+
+  defp apply_pseudo_bb(board, <<"e8g8">>) do
+    board.bb
+    |> clear_bit(:k, square_offset("e8"))
+    |> clear_bit(:r, square_offset("h8"))
+    |> set_bit(:k, square_offset("g8"))
+    |> set_bit(:r, square_offset("f8"))
+  end
+
+  defp apply_pseudo_bb(board, <<"e8c8">>) do
+    board.bb
+    |> clear_bit(:k, square_offset("e8"))
+    |> clear_bit(:r, square_offset("a8"))
+    |> set_bit(:k, square_offset("c8"))
+    |> set_bit(:r, square_offset("d8"))
+  end
+
+  defp apply_pseudo_bb(board, <<c1::8, r1::8, c2::8, r2::8, promo::8>>) do
+    from = square_offset(<<c1, r1>>)
+    to = square_offset(<<c2, r2>>)
+    pawn = which_piece_bb(board.bb, from)
+    promo_piece = promo_atom(pawn, promo)
+
+    board.bb
+    |> clear_bit(pawn, from)
+    |> clear_square_bb(to)
+    |> set_bit(promo_piece, to)
+  end
+
+  defp apply_pseudo_bb(board, <<c1::8, r1::8, c2::8, r2::8>>) do
+    from = square_offset(<<c1, r1>>)
+    to = square_offset(<<c2, r2>>)
+    piece = which_piece_bb(board.bb, from)
+
+    bb =
+      board.bb
+      |> clear_bit(piece, from)
+      |> clear_square_bb(to)
+      |> set_bit(piece, to)
+
+    if piece in [:P, :p] and board.en_passant == <<c2, r2>> do
+      clear_square_bb(bb, square_offset(<<c2, r1>>))
+    else
+      bb
+    end
+  end
+
+  defp square_offset(<<c::8, r::8>>) do
+    {_row, _col, offset} = rco(r, c)
+    offset
+  end
+
+  defp which_piece_bb(bb, offset) do
+    mask = 1 <<< offset
+    Enum.find(@pieces_set, fn piece -> (Attacks.as_int(bb[piece]) &&& mask) != 0 end)
+  end
+
+  defp set_bit(bb, nil, _offset), do: bb
+
+  defp set_bit(bb, piece, offset) do
+    Map.update(bb, piece, 0, fn x -> Attacks.as_int(x) ||| 1 <<< offset end)
+  end
+
+  defp clear_bit(bb, nil, _offset), do: bb
+
+  defp clear_bit(bb, piece, offset) do
+    Map.update(bb, piece, 0, fn x -> Attacks.as_int(x) &&& ~~~(1 <<< offset) end)
+  end
+
+  defp clear_square_bb(bb, offset) do
+    case which_piece_bb(bb, offset) do
+      nil -> bb
+      piece -> clear_bit(bb, piece, offset)
+    end
+  end
+
+  defp promo_atom(:P, ?q), do: :Q
+  defp promo_atom(:P, ?r), do: :R
+  defp promo_atom(:P, ?b), do: :B
+  defp promo_atom(:P, ?n), do: :N
+  defp promo_atom(:p, ?q), do: :q
+  defp promo_atom(:p, ?r), do: :r
+  defp promo_atom(:p, ?b), do: :b
+  defp promo_atom(:p, ?n), do: :n
+  defp promo_atom(piece, _), do: piece
+
 end
