@@ -1,18 +1,19 @@
 defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
   @moduledoc """
   Alpha-beta negamax with ETS transposition table, iterative deepening,
-  null-move pruning, LMR, futility, quiescence search, and optional root-split SMP.
+  null-move pruning, LMR, futility, quiescence search, two killers,
+  history, and optional root-split SMP.
   """
   alias Laveno.Board
   alias Laveno.Board.See
   alias Laveno.Board.Utils
   alias Laveno.Evaluation.Evaluator
+  alias Laveno.Search.Heuristics
   alias Laveno.SearchControl
 
   @neg_inf -1_000_000
   @pos_inf 1_000_000
   @table :laveno_tt
-  @killer_table :laveno_killer
   @null_r 2
   @default_max_depth 64
   @qsearch_max_ply 8
@@ -30,7 +31,7 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
   @spec find(Board.t(), integer(), integer(), integer(), keyword()) :: {integer(), Board.t()}
   def find(board, max_depth, _alpha, _beta, opts) do
     ensure_table()
-    ensure_killer_table()
+    Heuristics.ensure()
     SearchControl.ensure()
 
     threads = max(1, Keyword.get(opts, :threads, 1))
@@ -117,13 +118,6 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
 
       _ ->
         :ok
-    end
-  end
-
-  defp ensure_killer_table do
-    case :ets.info(@killer_table) do
-      :undefined -> :ets.new(@killer_table, [:named_table, :set, :public])
-      _ -> :ok
     end
   end
 
@@ -251,8 +245,7 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
         new_a = max(a, s)
 
         if new_a >= beta do
-          ensure_killer_table()
-          :ets.insert(@killer_table, {depth, mv})
+          if quiet_move?(board, mv), do: Heuristics.record_cutoff(depth, mv)
           {:halt, {new_bs, new_bm, new_a, idx + 1}}
         else
           {:cont, {new_bs, new_bm, new_a, idx + 1}}
@@ -390,13 +383,17 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
     Utils.which_piece?(board, <<c2, r2>>) != nil
   end
 
+  defp quiet_move?(board, mv) do
+    byte_size(mv) == 4 and not capture_move?(board, mv)
+  end
+
   defp ordered_moves(board, depth) do
     ordered_moves(board, depth, Utils.generate_moves(board))
   end
 
   defp ordered_moves(board, depth, base) do
     ensure_table()
-    ensure_killer_table()
+    Heuristics.ensure()
 
     base =
       case :ets.lookup(@table, position_key(board)) do
@@ -423,14 +420,7 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
         :desc
       )
 
-    killer =
-      case :ets.lookup(@killer_table, depth) do
-        [{^depth, mv}] -> mv
-        _ -> nil
-      end
-
-    others = if killer in others, do: [killer | List.delete(others, killer)], else: others
-    promos ++ captures_sorted ++ others
+    promos ++ captures_sorted ++ Heuristics.sort_quiets(others, depth)
   end
 
   defp position_key(board) do
