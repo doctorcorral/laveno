@@ -170,12 +170,13 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
         {beta, board}
 
       true ->
-        legal = Utils.generate_moves(board)
-
-        if depth <= 0 or legal == [] do
+        if depth <= 0 do
           quiesce(board, alpha, beta)
         else
-          search_moves(board, depth, alpha, beta)
+          case Utils.generate_moves(board) do
+            [] -> quiesce(board, alpha, beta)
+            legal -> search_moves(board, depth, alpha, beta, legal)
+          end
         end
     end
   end
@@ -196,9 +197,9 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
     end
   end
 
-  defp search_moves(board, depth, alpha, beta) do
+  defp search_moves(board, depth, alpha, beta, legal) do
     alpha_orig = alpha
-    moves = ordered_moves(board, depth)
+    moves = ordered_moves(board, depth, legal)
     in_check? = Utils.in_check?(board)
     stand = if in_check?, do: nil, else: stand_pat(board)
 
@@ -347,13 +348,13 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
           {:cont, {a, b_board}}
         else
           case Board.move(board, mv) do
-            %Board{} = nb ->
-              {score, _} = quiesce(nb, -beta, -a, ply + 1)
+            %Board{} = child ->
+              {score, _} = quiesce(child, -beta, -a, ply + 1)
               score = -score
 
               cond do
-                score >= beta -> {:halt, {score, nb}}
-                score > a -> {:cont, {score, nb}}
+                score >= beta -> {:halt, {score, child}}
+                score > a -> {:cont, {score, child}}
                 true -> {:cont, {a, board}}
               end
 
@@ -390,15 +391,23 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
   end
 
   defp ordered_moves(board, depth) do
+    ordered_moves(board, depth, Utils.generate_moves(board))
+  end
+
+  defp ordered_moves(board, depth, base) do
     ensure_table()
     ensure_killer_table()
-    base = Utils.generate_moves(board)
 
     base =
       case :ets.lookup(@table, position_key(board)) do
-        [{_, _, _, bm, _}] when bm != nil -> [bm | List.delete(base, bm)]
-        [{_, _, _, bm}] when bm != nil -> [bm | List.delete(base, bm)]
-        _ -> base
+        [{_, _, _, bm, _} | _] when is_binary(bm) ->
+          if bm in base, do: [bm | List.delete(base, bm)], else: base
+
+        [{_, _, _, bm} | _] when is_binary(bm) ->
+          if bm in base, do: [bm | List.delete(base, bm)], else: base
+
+        _ ->
+          base
       end
 
     {promos, rest} = Enum.split_with(base, &(byte_size(&1) == 5))

@@ -558,28 +558,36 @@ defmodule Laveno.Board.Utils do
 
   def where_is(%{bb: bb}, piece), do: Attacks.bits(bb[piece])
 
-  def generate_moves(board = %{active_color: <<0::1>>}) do
-    (moves_for_pieces(board, @w_pieces) ++ castle_moves(board))
-    |> Enum.filter(&king_safe_after?(board, &1))
+  @doc """
+  Pseudo-legal moves: destination masks plus validated castling. Search
+  rejects moves that leave the mover in check after make.
+  """
+  def generate_pseudo(board = %{active_color: <<0::1>>}) do
+    moves_for_pieces(board, @w_pieces) ++ castle_moves(board)
   end
 
-  def generate_moves(board = %{active_color: <<1::1>>}) do
-    (moves_for_pieces(board, @b_pieces) ++ castle_moves(board))
-    |> Enum.filter(&king_safe_after?(board, &1))
+  def generate_pseudo(board = %{active_color: <<1::1>>}) do
+    moves_for_pieces(board, @b_pieces) ++ castle_moves(board)
+  end
+
+  def generate_moves(board) do
+    Enum.filter(generate_pseudo(board), &king_safe_after?(board, &1))
   end
 
   @doc """
   Captures, en passant, and promotions. Used by quiescence so it does not
   expand every quiet move.
   """
-  def generate_noisy(board = %{active_color: <<0::1>>}) do
+  def generate_pseudo_noisy(board = %{active_color: <<0::1>>}) do
     noisy_for_pieces(board, @w_pieces)
-    |> Enum.filter(&king_safe_after?(board, &1))
   end
 
-  def generate_noisy(board = %{active_color: <<1::1>>}) do
+  def generate_pseudo_noisy(board = %{active_color: <<1::1>>}) do
     noisy_for_pieces(board, @b_pieces)
-    |> Enum.filter(&king_safe_after?(board, &1))
+  end
+
+  def generate_noisy(board) do
+    Enum.filter(generate_pseudo_noisy(board), &king_safe_after?(board, &1))
   end
 
   # King move masks are one square; castling must be injected separately
@@ -877,6 +885,23 @@ defmodule Laveno.Board.Utils do
     end
   end
 
+  @doc """
+  True if the side that just moved left their king in check.
+  Call after `Board.apply_search/2` (side to move already flipped).
+  """
+  def left_in_check?(board) do
+    {king, by} =
+      case board.active_color do
+        <<0::1>> -> {:k, :white}
+        <<1::1>> -> {:K, :black}
+      end
+
+    case Attacks.bits(board.bb[king]) do
+      [sq | _] -> square_attacked_by?(board, sq, by)
+      [] -> true
+    end
+  end
+
   def square_attacked_by?(board, <<c::8, r::8>>, by) do
     {_row, _col, offset} = rco(r, c)
     square_attacked_by?(board, offset, by)
@@ -926,6 +951,8 @@ defmodule Laveno.Board.Utils do
   defp occupancy_from_bb(bb) do
     Enum.reduce(@pieces_set, 0, fn piece, acc -> acc ||| Attacks.as_int(bb[piece]) end)
   end
+
+  def apply_pseudo(board, move), do: apply_pseudo_bb(board, move)
 
   defp apply_pseudo_bb(board, <<"e1g1">>) do
     board.bb

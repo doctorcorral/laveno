@@ -179,10 +179,12 @@ defmodule Laveno.Board do
          piece <- Utils.which_piece?(board, from_square),
          true <- right_turn?(board, piece) do
       is_capture = Utils.which_piece?(board, to_square) != nil
+      is_ep = piece in [:P, :p] and board.en_passant == to_square
       is_pawn_move = piece in [:P, :p]
 
       board
       |> update_castling_rights(piece, from_square, to_square)
+      |> then(fn b -> if is_ep, do: clear_square(b, <<c2, r1>>), else: b end)
       |> clear_square(from_square)
       |> clear_square(to_square)
       |> place_piece(piece, to_square)
@@ -194,6 +196,37 @@ defmodule Laveno.Board do
       _ -> {:error, "invalid move"}
     end
   end
+
+  @doc """
+  Apply a movegen move without `valid_move?` or move-history logging.
+  Search uses this; UCI position still goes through `move/2`.
+  """
+  def apply_search(board = %__MODULE__{}, <<c1::8, r1::8, c2::8, r2::8, _::binary>> = move) do
+    from = <<c1, r1>>
+    to = <<c2, r2>>
+    piece = Utils.which_piece?(board, from)
+
+    if piece == nil do
+      {:error, "invalid move"}
+    else
+      is_capture =
+        Utils.which_piece?(board, to) != nil or
+          (piece in [:P, :p] and board.en_passant == to)
+
+      board
+      |> update_castling_rights(piece, from, to)
+      |> Map.put(:bb, Utils.apply_pseudo(board, move))
+      |> proc_en_passant(piece, move)
+      |> then(
+        if piece in [:P, :p] or is_capture,
+          do: &reset_halfmove_clock/1,
+          else: &increment_count/1
+      )
+      |> flip_active_color()
+    end
+  end
+
+  def apply_search(_, _), do: {:error, "invalid move"}
 
   def right_turn?(%{active_color: <<0::1>>}, piece)
       when piece in @w_pieces,
