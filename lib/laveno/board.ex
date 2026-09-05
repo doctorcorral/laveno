@@ -23,12 +23,8 @@ defmodule Laveno.Board do
           moves: list(bitstring())
         }
 
-  use Bitwise
   require Logger
 
-  @offset_row 49
-  @offset_column 97
-  @pieces_set [:P, :p, :N, :n, :B, :b, :K, :k, :Q, :q, :R, :r]
   @w_pieces [:P, :R, :N, :B, :K, :Q]
   @b_pieces [:p, :r, :n, :b, :k, :q]
 
@@ -305,7 +301,7 @@ defmodule Laveno.Board do
   def proc_en_passant(
         board,
         pawn,
-        move = <<c1::8, r1::8, c2::8, r2::8>>
+        <<_c1::8, r1::8, c2::8, r2::8>>
       )
       when pawn in [:P, :p] do
     case abs(r2 - r1) == 2 do

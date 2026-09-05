@@ -31,7 +31,7 @@ defmodule Laveno.Finders.MinimaxABPruning do
         end
       )
 
-    [{"eval_w", evaluation, moves}] = :ets.lookup(:laveno_search, "eval_w")
+    [{"eval_w", evaluation, _moves}] = :ets.lookup(:laveno_search, "eval_w")
 
     if evaluation < total_eval do
       :ets.insert(:laveno_search, {"eval_w", total_eval, local_moves.moves})
@@ -58,7 +58,6 @@ defmodule Laveno.Finders.MinimaxABPruning do
         " currmovenumber 0"
     )
 
-    [{"eval", evaluation, board}] = :ets.lookup(:laveno_search, "eval")
     {total_eval, local_moves}
   end
 
@@ -81,7 +80,7 @@ defmodule Laveno.Finders.MinimaxABPruning do
         end
       )
 
-    [{"eval_b", evaluation, moves}] = :ets.lookup(:laveno_search, "eval_b")
+    [{"eval_b", evaluation, _moves}] = :ets.lookup(:laveno_search, "eval_b")
 
     if evaluation > total_eval do
       :ets.insert(:laveno_search, {"eval_b", total_eval, local_moves.moves})

@@ -593,7 +593,7 @@ defmodule LavenoTest.PieceMovility.PromotionTest do
               |> Board.place_piece(:k, "h8")
               |> Board.set_active_color("w")
 
-      {eval_d2, board_d2} = Finder.find(board, 2, -90, 90)
+      {eval_d2, _board_d2} = Finder.find(board, 2, -90, 90)
       {eval_d3, board_d3} = Finder.find(board, 3, -90, 90)
 
       move_d3 = List.last(board_d3.moves)

@@ -218,7 +218,7 @@ defmodule Laveno.UCI do
 
   defp engine_version do
     case Application.spec(:laveno, :vsn) do
-      nil -> "0.4.0"
+      nil -> "0.5.0"
       vsn -> to_string(vsn)
     end
   end

@@ -1,5 +1,5 @@
 defmodule Laveno.Board.Utils do
-  use Bitwise
+  import Bitwise
   require Logger
 
   alias Laveno.Board
@@ -58,8 +58,6 @@ defmodule Laveno.Board.Utils do
   @w_pieces [:P, :R, :N, :B, :K, :Q]
   @b_pieces [:p, :r, :n, :b, :k, :q]
 
-  @all_pieces @w_pieces ++ @b_pieces
-
   def initial_position_binary() do
     %{
       P: Attacks.as_int(<<0::8, 255::8, 0::48>>),
@@ -104,7 +102,7 @@ defmodule Laveno.Board.Utils do
     Map.update(bitboard, piece, 0, fn bb -> Attacks.as_int(bb) &&& ~~~(1 <<< offset) end)
   end
 
-  def clear_square(board = %{bb: bitboard}, square = <<c::size(8), r::size(8)>>) do
+  def clear_square(board = %{bb: bitboard}, square = <<_c::size(8), _r::size(8)>>) do
     case which_piece?(board, square) do
       nil -> bitboard
       piece -> remove_piece(board, piece, square)
@@ -224,10 +222,10 @@ defmodule Laveno.Board.Utils do
 
   """
   def which_piece?(
-        board = %{bb: bb},
-        square = <<column::size(8), row::size(8)>>
+        board,
+        <<column::size(8), row::size(8)>>
       ) do
-    {r, c, offset} = rco(row, column)
+    {_r, _c, offset} = rco(row, column)
     which_piece?(board, offset)
   end
 
@@ -268,7 +266,7 @@ defmodule Laveno.Board.Utils do
 
   def inbound?(
         _,
-        move = <<c1::size(8), r1::size(8), c2::size(8), r2::size(8)>>
+        <<_c1::size(8), _r1::size(8), _c2::size(8), _r2::size(8)>>
       ) do
     true
   end
@@ -276,7 +274,7 @@ defmodule Laveno.Board.Utils do
   def indiagonalpawn?(
         board = %{en_passant: en_passant},
         pawn,
-        <<c1::size(8), r1::size(8), c2::size(8), r2::size(8)>>
+        <<c1::size(8), _r1::size(8), c2::size(8), r2::size(8)>>
       )
       when pawn in [:pawn, :P, :p] do
     case c2 - 1 == c1 || c2 + 1 == c1 do
@@ -298,7 +296,7 @@ defmodule Laveno.Board.Utils do
 
   def infirst?(
         pawn,
-        <<c1::size(8), r1::size(8), c2::size(8), r2::size(8)>>
+        <<_c1::size(8), r1::size(8), _c2::size(8), r2::size(8)>>
       )
       when pawn in [:pawn, :P, :p] do
     case abs(r2 - r1) > 1 do
@@ -420,7 +418,7 @@ defmodule Laveno.Board.Utils do
     end
   end
 
-  def valid_move?(board, move = <<c1::8, r1::8, c2::8, r2::8>>) do
+  def valid_move?(board, <<c1::8, r1::8, c2::8, r2::8>>) do
     file_from = c1 - @offset_column
     rank_from = r1 - @offset_row
     file_to   = c2 - @offset_column
@@ -606,7 +604,7 @@ defmodule Laveno.Board.Utils do
     end)
   end
 
-  def diagonal_path_mask(board, <<c1::size(8), r1::size(8), c2::size(8), r2::size(8)>>) do
+  def diagonal_path_mask(_board, <<c1::size(8), r1::size(8), c2::size(8), r2::size(8)>>) do
     with true <- abs(c1 - c2) == abs(r1 - r2) do
       cond do
         # ↖
@@ -649,7 +647,7 @@ defmodule Laveno.Board.Utils do
     end
   end
 
-  def linear_path_mask(board, <<c1::size(8), r1::size(8), c2::size(8), r2::size(8)>>) do
+  def linear_path_mask(_board, <<c1::size(8), r1::size(8), c2::size(8), r2::size(8)>>) do
     with true <- r1 == r2 or c1 == c2 do
       cond do
         # ↑

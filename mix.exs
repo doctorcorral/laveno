@@ -4,7 +4,7 @@ defmodule Laveno.MixProject do
   def project do
     [
       app: :laveno,
-      version: "0.4.0",
+      version: "0.5.0",
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -13,7 +13,7 @@ defmodule Laveno.MixProject do
       homepage_url: "https://laveno.one",
       docs: [
         main: "Laveno",
-        extras: ["README.md"]
+        extras: ["README.md", "TOURNAMENTS.md"]
       ],
       package: [
         maintainers: ["Ricardo Corral-Corral"],
