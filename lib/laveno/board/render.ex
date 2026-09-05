@@ -29,7 +29,7 @@ defmodule Laveno.Board.Render do
   end
 
   def print_board(board, theme \\ :red) do
-    Enum.each(8..1, fn row_number ->
+    Enum.each(8..1//-1, fn row_number ->
       Utils.board_to_unicode_row(board, row_number)
       |> print_rank(row_number, board_color(theme))
       |> IO.puts()

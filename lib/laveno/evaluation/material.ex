@@ -5,7 +5,6 @@ defmodule Laveno.Evaluation.Material do
   @w_pieces [:Q, :R, :N, :B, :P]
   @b_pieces [:q, :r, :n, :b, :p]
 
-  alias Laveno.Board
   alias Laveno.Board.Utils
 
   def eval(board) do

@@ -76,5 +76,17 @@ defmodule LavenoTest.PieceMovility.PawnTest do
              |> Board.place_piece(:P, "h3")
              |> Utils.valid_move?("h3a4") == false
     end
+
+    test "en passant capture removes the captured pawn" do
+      {_s, board} = Laveno.Fen.load("4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1")
+      played = Board.move(board, "e5d6")
+      assert Utils.which_piece?(played, "d6") == :P
+      assert Utils.which_piece?(played, "d5") == nil
+
+      searched = Board.apply_search(board, "e5d6")
+      assert Utils.which_piece?(searched, "d6") == :P
+      assert Utils.which_piece?(searched, "d5") == nil
+      refute Utils.left_in_check?(searched)
+    end
   end
 end

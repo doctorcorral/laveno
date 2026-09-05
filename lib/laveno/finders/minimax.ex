@@ -1,7 +1,6 @@
 defmodule Laveno.Finders.Minimax do
   alias Laveno.Board
   alias Laveno.Board.Utils
-  alias Laveno.Evaluation
   alias Laveno.Evaluation.Evaluator
 
   @infinity_plus 1_000

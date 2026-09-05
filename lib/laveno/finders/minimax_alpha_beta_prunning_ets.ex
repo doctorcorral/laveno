@@ -20,7 +20,6 @@ defmodule Laveno.Finders.MinimaxABPruningETS do
     end)
   end
 
-  @doc "Ensure the ETS transposition table exists as a named table"
   defp ensure_table do
     case :ets.info(@table) do
       :undefined ->
@@ -151,7 +150,7 @@ defmodule Laveno.Finders.MinimaxABPruningETS do
     end
   end
 
-  defp quiesce_loop([], board, alpha, _beta, stand), do: {stand, board}
+  defp quiesce_loop([], board, _alpha, _beta, stand), do: {stand, board}
   defp quiesce_loop([mv | rest], board, alpha, beta, stand) do
     case Board.move(board, mv) do
       %Board{} = nb ->

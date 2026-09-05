@@ -1,3 +1,13 @@
+## 0.5.0 [2026-09-05]
+
+- [New Feature] Structure eval: mobility, pawn structure, rook files, and
+  side-to-move hanging / pawn-attack threats on top of PeSTO and king safety.
+- [New Feature] Late-move reductions and futility / reverse-futility pruning.
+- [Enhancement] Transposition entries store exact / lower / upper bounds
+  instead of treating every cutoff as exact.
+- [Enhancement] Search generates the legal move list once per node.
+- [Bug Fix] En passant capture removes the captured pawn.
+
 ## 0.4.0 [2026-09-04]
 
 - [Tournament] UCI protocol required by TCEC and Chess.com CCC: options
