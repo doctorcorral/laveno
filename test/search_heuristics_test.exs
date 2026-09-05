@@ -63,4 +63,11 @@ defmodule Laveno.SearchHeuristicsTest do
     size = :ets.info(:laveno_history, :size)
     assert is_integer(size) and size > 0
   end
+
+  test "aspiration search at depth 4 still returns a legal startpos move" do
+    board = Board.new()
+    {_eval, result} = Finder.find(board, 4, -1_000_000, 1_000_000)
+    move = List.last(result.moves)
+    assert move in Laveno.Board.Utils.generate_moves(board)
+  end
 end
