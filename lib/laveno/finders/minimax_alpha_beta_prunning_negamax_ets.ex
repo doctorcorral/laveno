@@ -1,19 +1,18 @@
 defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
   @moduledoc """
   Alpha-beta negamax with ETS transposition table, iterative deepening,
-  aspiration windows, PVS, null-move pruning, LMR, futility, quiescence,
-  two killers, history, and optional root-split SMP.
+  null-move pruning, LMR, futility, quiescence search, and optional root-split SMP.
   """
   alias Laveno.Board
   alias Laveno.Board.See
   alias Laveno.Board.Utils
   alias Laveno.Evaluation.Evaluator
-  alias Laveno.Search.Heuristics
   alias Laveno.SearchControl
 
   @neg_inf -1_000_000
   @pos_inf 1_000_000
   @table :laveno_tt
+  @killer_table :laveno_killer
   @null_r 2
   @default_max_depth 64
   @qsearch_max_ply 8
@@ -22,7 +21,6 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
   @lmr_min_move 3
   @futility_margin 175
   @rfp_margin 90
-  @asp_window 50
 
   @spec find(Board.t(), integer(), integer(), integer()) :: {integer(), Board.t()}
   def find(board, max_depth, alpha, beta) do
@@ -32,7 +30,7 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
   @spec find(Board.t(), integer(), integer(), integer(), keyword()) :: {integer(), Board.t()}
   def find(board, max_depth, _alpha, _beta, opts) do
     ensure_table()
-    Heuristics.ensure()
+    ensure_killer_table()
     SearchControl.ensure()
 
     threads = max(1, Keyword.get(opts, :threads, 1))
@@ -42,7 +40,7 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
       if SearchControl.aborting?() do
         {:halt, {prev_eval, prev_board}}
       else
-        {eval, new_board} = aspirated_root(board, depth, threads, prev_eval)
+        {eval, new_board} = root_search(board, depth, threads)
 
         if SearchControl.aborting?() do
           {:halt, {prev_eval, prev_board}}
@@ -54,37 +52,16 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
     end)
   end
 
-  defp aspirated_root(board, 1, threads, _prev_eval) do
-    root_search(board, 1, threads, @neg_inf, @pos_inf)
+  defp root_search(board, depth, 1) do
+    negamax_tt(board, depth, @neg_inf, @pos_inf)
   end
 
-  defp aspirated_root(board, depth, threads, prev_eval) do
-    alpha = prev_eval - @asp_window
-    beta = prev_eval + @asp_window
-    {eval, new_board} = root_search(board, depth, threads, alpha, beta)
-
-    cond do
-      SearchControl.aborting?() ->
-        {eval, new_board}
-
-      eval <= alpha or eval >= beta ->
-        root_search(board, depth, threads, @neg_inf, @pos_inf)
-
-      true ->
-        {eval, new_board}
-    end
-  end
-
-  defp root_search(board, depth, 1, alpha, beta) do
-    negamax_tt(board, depth, alpha, beta)
-  end
-
-  defp root_search(board, depth, threads, alpha, beta) do
+  defp root_search(board, depth, threads) do
     moves = ordered_moves(board, depth)
 
     cond do
       moves == [] ->
-        quiesce(board, alpha, beta)
+        quiesce(board, @neg_inf, @pos_inf)
 
       true ->
         workers = max(1, min(threads, length(moves)))
@@ -93,7 +70,7 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
         {best_score, best_move} =
           chunks
           |> Enum.map(fn chunk ->
-            Task.async(fn -> search_root_moves(board, chunk, depth, alpha, beta) end)
+            Task.async(fn -> search_root_moves(board, chunk, depth) end)
           end)
           |> Task.await_many(:infinity)
           |> Enum.max_by(fn {score, _move} -> score end)
@@ -102,14 +79,14 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
     end
   end
 
-  defp search_root_moves(board, moves, depth, alpha, beta) do
+  defp search_root_moves(board, moves, depth) do
     Enum.reduce(moves, {@neg_inf, hd(moves)}, fn mv, {best_score, best_move} ->
       if SearchControl.aborting?() do
         {best_score, best_move}
       else
         case Board.move(board, mv) do
           %Board{} = nb ->
-            {s, _} = negamax_tt(nb, depth - 1, -beta, -alpha)
+            {s, _} = negamax_tt(nb, depth - 1, @neg_inf, @pos_inf)
             s = -s
             if s > best_score, do: {s, mv}, else: {best_score, best_move}
 
@@ -140,6 +117,13 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
 
       _ ->
         :ok
+    end
+  end
+
+  defp ensure_killer_table do
+    case :ets.info(@killer_table) do
+      :undefined -> :ets.new(@killer_table, [:named_table, :set, :public])
+      _ -> :ok
     end
   end
 
@@ -250,16 +234,12 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
     case Board.move(board, mv) do
       %Board{} = nb ->
         gives_check? = Utils.in_check?(nb)
-        reduced = child_depth(depth, idx, mv, board, in_check?, gives_check?)
-        pv? = bm == nil
-        scout_depth = if pv?, do: depth - 1, else: reduced
-        scout_beta = if pv? or beta <= a + 1, do: beta, else: a + 1
-
-        {s, _} = negamax_tt(nb, scout_depth, -scout_beta, -a)
+        child = child_depth(depth, idx, mv, board, in_check?, gives_check?)
+        {s, _} = negamax_tt(nb, child, -beta, -a)
         s = -s
 
         s =
-          if not pv? and s > a and not SearchControl.aborting?() do
+          if child < depth - 1 and s > a do
             {s2, _} = negamax_tt(nb, depth - 1, -beta, -a)
             -s2
           else
@@ -271,7 +251,8 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
         new_a = max(a, s)
 
         if new_a >= beta do
-          if quiet_move?(board, mv), do: Heuristics.record_cutoff(depth, mv)
+          ensure_killer_table()
+          :ets.insert(@killer_table, {depth, mv})
           {:halt, {new_bs, new_bm, new_a, idx + 1}}
         else
           {:cont, {new_bs, new_bm, new_a, idx + 1}}
@@ -330,7 +311,8 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
       Utils.in_check?(board) ->
         case Utils.generate_moves(board) do
           [] ->
-            {-10_000, board}
+            # Clock abort must not look like checkmate or the TT is poisoned.
+            if SearchControl.aborting?(), do: {alpha, board}, else: {-10_000, board}
 
           evasions ->
             qsearch_moves(board, evasions, alpha, beta, ply, false, nil)
@@ -409,17 +391,13 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
     Utils.which_piece?(board, <<c2, r2>>) != nil
   end
 
-  defp quiet_move?(board, mv) do
-    byte_size(mv) == 4 and not capture_move?(board, mv)
-  end
-
   defp ordered_moves(board, depth) do
     ordered_moves(board, depth, Utils.generate_moves(board))
   end
 
   defp ordered_moves(board, depth, base) do
     ensure_table()
-    Heuristics.ensure()
+    ensure_killer_table()
 
     base =
       case :ets.lookup(@table, position_key(board)) do
@@ -446,7 +424,14 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
         :desc
       )
 
-    promos ++ captures_sorted ++ Heuristics.sort_quiets(others, depth)
+    killer =
+      case :ets.lookup(@killer_table, depth) do
+        [{^depth, mv}] -> mv
+        _ -> nil
+      end
+
+    others = if killer in others, do: [killer | List.delete(others, killer)], else: others
+    promos ++ captures_sorted ++ others
   end
 
   defp position_key(board) do

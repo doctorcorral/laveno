@@ -8,7 +8,6 @@ defmodule Laveno.SearchControl do
   @table :laveno_search_ctrl
   @tt :laveno_tt
   @killers :laveno_killer
-  @history :laveno_history
 
   def ensure do
     case :ets.info(@table) do
@@ -91,7 +90,7 @@ defmodule Laveno.SearchControl do
   end
 
   def clear_hash do
-    for table <- [@tt, @killers, @history] do
+    for table <- [@tt, @killers] do
       case :ets.info(table) do
         :undefined -> :ok
         _ -> :ets.delete_all_objects(table)
