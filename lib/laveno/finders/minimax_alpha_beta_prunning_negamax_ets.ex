@@ -311,7 +311,8 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
       Utils.in_check?(board) ->
         case Utils.generate_moves(board) do
           [] ->
-            {-10_000, board}
+            # Clock abort must not look like checkmate or the TT is poisoned.
+            if SearchControl.aborting?(), do: {alpha, board}, else: {-10_000, board}
 
           evasions ->
             qsearch_moves(board, evasions, alpha, beta, ply, false, nil)
