@@ -569,6 +569,14 @@ defmodule Laveno.Board.Utils do
   end
 
   def generate_moves(board) do
+    select_legal(board, generate_pseudo(board))
+  end
+
+  @doc """
+  Reference legality: make every pseudo-legal dest and test the king.
+  Used by tests to check the pin-aware filter.
+  """
+  def generate_moves_by_make(board) do
     Enum.filter(generate_pseudo(board), &king_safe_after?(board, &1))
   end
 
@@ -585,7 +593,97 @@ defmodule Laveno.Board.Utils do
   end
 
   def generate_noisy(board) do
-    Enum.filter(generate_pseudo_noisy(board), &king_safe_after?(board, &1))
+    select_legal(board, generate_pseudo_noisy(board))
+  end
+
+  defp select_legal(board, moves) do
+    {king, by, own} =
+      case board.active_color do
+        <<0::1>> -> {:K, :black, :white}
+        <<1::1>> -> {:k, :white, :black}
+      end
+
+    case Attacks.bits(board.bb[king]) do
+      [] ->
+        []
+
+      [king_sq | _] ->
+        occ = occupancy_mask(board)
+        checkers = Attacks.checkers(board.bb, occ, king_sq, by)
+        pinned = Attacks.pinned(board.bb, occ, king_sq, own)
+        filter_legal(board, moves, king_sq, checkers, pinned)
+    end
+  end
+
+  defp filter_legal(board, moves, king_sq, checkers, pinned) do
+    case Attacks.popcount(checkers) do
+      n when n >= 2 ->
+        Enum.filter(moves, fn mv ->
+          king_move?(mv, king_sq) and king_safe_after?(board, mv)
+        end)
+
+      1 ->
+        [checker] = Attacks.bits(checkers)
+        blocks = Attacks.between(king_sq, checker)
+
+        Enum.filter(moves, fn mv ->
+          {from, to} = move_squares(mv)
+
+          cond do
+            from == king_sq ->
+              king_safe_after?(board, mv)
+
+            (blocks &&& 1 <<< to) == 0 and to != checker ->
+              false
+
+            (pinned &&& 1 <<< from) != 0 or ep_move?(board, mv) ->
+              king_safe_after?(board, mv)
+
+            true ->
+              true
+          end
+        end)
+
+      _ ->
+        Enum.filter(moves, fn mv ->
+          {from, _to} = move_squares(mv)
+
+          cond do
+            from == king_sq ->
+              king_safe_after?(board, mv)
+
+            (pinned &&& 1 <<< from) != 0 or ep_move?(board, mv) ->
+              king_safe_after?(board, mv)
+
+            true ->
+              true
+          end
+        end)
+    end
+  end
+
+  defp move_squares(<<c1::8, r1::8, c2::8, r2::8, _::binary>>) do
+    {_r, _c, from} = rco(r1, c1)
+    {_r2, _c2, to} = rco(r2, c2)
+    {from, to}
+  end
+
+  defp king_move?(mv, king_sq) do
+    {from, _} = move_squares(mv)
+    from == king_sq
+  end
+
+  defp ep_move?(%{en_passant: ep} = board, <<c1::8, r1::8, c2::8, r2::8, _::binary>>)
+       when is_binary(ep) do
+    ep == <<c2, r2>> and pawn_on?(board, r1, c1)
+  end
+
+  defp ep_move?(_, _), do: false
+
+  defp pawn_on?(board, row, column) do
+    {_r, _c, offset} = rco(row, column)
+    mask = 1 <<< offset
+    (Attacks.as_int(board.bb[:P]) &&& mask) != 0 or (Attacks.as_int(board.bb[:p]) &&& mask) != 0
   end
 
   # King move masks are one square; castling must be injected separately
