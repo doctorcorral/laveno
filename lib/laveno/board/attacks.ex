@@ -114,6 +114,118 @@ defmodule Laveno.Board.Attacks do
       (rook_attacks(sq, occ) &&& (as_int(bbs[:R]) ||| as_int(bbs[:Q]))) != 0
   end
 
+  @doc "Bitboard of pieces of `by` that attack `king_sq`."
+  def checkers(bbs, occ, king_sq, :black) do
+    (pawn_attacks_white(king_sq) &&& as_int(bbs[:p])) |||
+      (knight_attacks(king_sq) &&& as_int(bbs[:n])) |||
+      (king_attacks(king_sq) &&& as_int(bbs[:k])) |||
+      (bishop_attacks(king_sq, occ) &&& (as_int(bbs[:b]) ||| as_int(bbs[:q]))) |||
+      (rook_attacks(king_sq, occ) &&& (as_int(bbs[:r]) ||| as_int(bbs[:q])))
+  end
+
+  def checkers(bbs, occ, king_sq, :white) do
+    (pawn_attacks_black(king_sq) &&& as_int(bbs[:P])) |||
+      (knight_attacks(king_sq) &&& as_int(bbs[:N])) |||
+      (king_attacks(king_sq) &&& as_int(bbs[:K])) |||
+      (bishop_attacks(king_sq, occ) &&& (as_int(bbs[:B]) ||| as_int(bbs[:Q]))) |||
+      (rook_attacks(king_sq, occ) &&& (as_int(bbs[:R]) ||| as_int(bbs[:Q])))
+  end
+
+  @doc "Bitboard of own pieces pinned to `king_sq` by an enemy slider."
+  def pinned(bbs, occ, king_sq, :white) do
+    own = as_int(bbs[:P]) ||| as_int(bbs[:N]) ||| as_int(bbs[:B]) ||| as_int(bbs[:R]) |||
+      as_int(bbs[:Q]) ||| as_int(bbs[:K])
+    rq = as_int(bbs[:r]) ||| as_int(bbs[:q])
+    bq = as_int(bbs[:b]) ||| as_int(bbs[:q])
+    pins_ortho(occ, own, rq, king_sq) ||| pins_diag(occ, own, bq, king_sq)
+  end
+
+  def pinned(bbs, occ, king_sq, :black) do
+    own = as_int(bbs[:p]) ||| as_int(bbs[:n]) ||| as_int(bbs[:b]) ||| as_int(bbs[:r]) |||
+      as_int(bbs[:q]) ||| as_int(bbs[:k])
+    rq = as_int(bbs[:R]) ||| as_int(bbs[:Q])
+    bq = as_int(bbs[:B]) ||| as_int(bbs[:Q])
+    pins_ortho(occ, own, rq, king_sq) ||| pins_diag(occ, own, bq, king_sq)
+  end
+
+  @doc "Squares strictly between two aligned squares; 0 if they are not on a ray."
+  def between(a, b) do
+    case ray_dir(a, b) do
+      nil -> 0
+      dir -> fill_until(elem(dir, a), b, dir, 0)
+    end
+  end
+
+  defp pins_ortho(occ, own, sliders, king_sq) do
+    pin_ray(occ, own, sliders, king_sq, @tables.n) |||
+      pin_ray(occ, own, sliders, king_sq, @tables.s) |||
+      pin_ray(occ, own, sliders, king_sq, @tables.e) |||
+      pin_ray(occ, own, sliders, king_sq, @tables.w)
+  end
+
+  defp pins_diag(occ, own, sliders, king_sq) do
+    pin_ray(occ, own, sliders, king_sq, @tables.ne) |||
+      pin_ray(occ, own, sliders, king_sq, @tables.nw) |||
+      pin_ray(occ, own, sliders, king_sq, @tables.se) |||
+      pin_ray(occ, own, sliders, king_sq, @tables.sw)
+  end
+
+  defp pin_ray(occ, own, sliders, from, dir) do
+    case first_occupied(elem(dir, from), occ, dir) do
+      nil ->
+        0
+
+      first ->
+        if (own &&& 1 <<< first) == 0 do
+          0
+        else
+          case first_occupied(elem(dir, first), occ, dir) do
+            nil ->
+              0
+
+            second ->
+              if (sliders &&& 1 <<< second) != 0, do: 1 <<< first, else: 0
+          end
+        end
+    end
+  end
+
+  defp first_occupied(nil, _occ, _dir), do: nil
+
+  defp first_occupied(sq, occ, dir) do
+    if (occ &&& 1 <<< sq) != 0, do: sq, else: first_occupied(elem(dir, sq), occ, dir)
+  end
+
+  defp ray_dir(a, b) do
+    fa = rem(63 - a, 8)
+    ra = div(63 - a, 8)
+    fb = rem(63 - b, 8)
+    rb = div(63 - b, 8)
+    df = fb - fa
+    dr = rb - ra
+    adf = abs(df)
+    adr = abs(dr)
+
+    cond do
+      df == 0 and dr > 0 -> @tables.n
+      df == 0 and dr < 0 -> @tables.s
+      dr == 0 and df > 0 -> @tables.e
+      dr == 0 and df < 0 -> @tables.w
+      adf == adr and adf > 0 and df > 0 and dr > 0 -> @tables.ne
+      adf == adr and df < 0 and dr > 0 -> @tables.nw
+      adf == adr and df > 0 and dr < 0 -> @tables.se
+      adf == adr and df < 0 and dr < 0 -> @tables.sw
+      true -> nil
+    end
+  end
+
+  defp fill_until(nil, _target, _dir, acc), do: acc
+  defp fill_until(sq, target, _dir, acc) when sq == target, do: acc
+
+  defp fill_until(sq, target, dir, acc) do
+    fill_until(elem(dir, sq), target, dir, acc ||| 1 <<< sq)
+  end
+
   defp ray(sq, occ, dir), do: walk(elem(dir, sq), occ, dir, 0)
 
   defp walk(nil, _occ, _dir, acc), do: acc
