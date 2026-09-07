@@ -1,9 +1,14 @@
 defmodule Laveno.EvaluationTest do
   use ExUnit.Case, async: true
+  import Bitwise
 
   alias Laveno.Board
+  alias Laveno.Board.Attacks
+  alias Laveno.Board.Utils
+  alias Laveno.Evaluation.Context
   alias Laveno.Evaluation.Evaluator
   alias Laveno.Evaluation.KingSafety
+  alias Laveno.Evaluation.Material
   alias Laveno.Evaluation.Mobility
   alias Laveno.Evaluation.Pawns
   alias Laveno.Evaluation.Placement
@@ -77,9 +82,54 @@ defmodule Laveno.EvaluationTest do
     assert_in_delta Threats.eval(safe), 0, 25
   end
 
+  test "fused static matches the sum of the eval modules" do
+    fens = [
+      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+      "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+      "rnbq1rk1/pppp1ppp/8/8/8/8/PPPP1PPP/RNBQ1RK1 w - - 0 1",
+      "4k3/8/8/2p5/3N4/8/8/4K3 b - - 0 1"
+    ]
+
+    Enum.each(fens, fn fen ->
+      {_s, board} = Fen.load(fen)
+      assert Evaluator.static(board) == oracle_static(board)
+    end)
+  end
+
+  test "fused static matches the oracle along a random legal walk" do
+    board =
+      Enum.reduce(1..80, Board.new(), fn _, board ->
+        assert Evaluator.static(board) == oracle_static(board)
+        case Utils.generate_moves(board) do
+          [] -> board
+          moves -> Board.move(board, Enum.random(moves))
+        end
+      end)
+
+    assert Evaluator.static(board) == oracle_static(board)
+  end
+
+  test "shared attack maps match attacked?/4 on every square" do
+    {_s, board} = Fen.load("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")
+    ctx = Context.build(board)
+    occ = ctx.occ
+
+    Enum.each(0..63, fn sq ->
+      bit = Bitwise.<<<(1, sq)
+      assert Attacks.attacked?(board.bb, occ, sq, :white) == ((ctx.w_att &&& bit) != 0)
+      assert Attacks.attacked?(board.bb, occ, sq, :black) == ((ctx.b_att &&& bit) != 0)
+    end)
+  end
+
   test "search does not give a queen for an undefended bishop" do
     {_s, board} = Fen.load("4k3/3b4/8/8/8/8/8/Q3K3 w - - 0 1")
     {_eval, result} = Finder.find(board, 3, -90, 90)
     refute List.last(result.moves) == "a1d7"
+  end
+
+  defp oracle_static(board) do
+    Material.eval(board) + Placement.eval(board) + KingSafety.eval(board) +
+      Mobility.eval(board) + Pawns.eval(board) + Threats.eval(board)
   end
 end
