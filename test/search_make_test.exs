@@ -10,6 +10,41 @@ defmodule Laveno.SearchMakeTest do
 
   defp norm(bb), do: Map.new(bb, fn {k, v} -> {k, Attacks.as_int(v)} end)
 
+  test "generate_moves does not inject opponent e1g1 as a castle" do
+    board =
+      Board.new(:empty)
+      |> Board.place_piece(:K, "c2")
+      |> Board.place_piece(:k, "g8")
+      |> Board.place_piece(:r, "e1")
+      |> Board.place_piece(:R, "h1")
+      |> Board.clear_castles()
+
+    refute "e1g1" in Utils.generate_moves(board)
+    refute "e1c1" in Utils.generate_moves(board)
+    assert Board.apply_search(board, "e1g1") == {:error, "invalid move"}
+  end
+
+  test "e1g1 is a rook slide when the king is not on e1" do
+    board =
+      Board.new(:empty)
+      |> Board.place_piece(:K, "h2")
+      |> Board.place_piece(:k, "e8")
+      |> Board.place_piece(:R, "e1")
+      |> Board.clear_castles()
+
+    via_move = Board.move(board, "e1g1")
+    via_search = Board.apply_search(board, "e1g1")
+
+    assert Utils.which_piece?(via_move, "g1") == :R
+    assert Utils.which_piece?(via_move, "e1") == nil
+    assert Utils.which_piece?(via_move, "h2") == :K
+    assert Utils.which_piece?(via_search, "g1") == :R
+    assert Utils.which_piece?(via_search, "e1") == nil
+    assert Utils.which_piece?(via_search, "h2") == :K
+    assert Utils.which_piece?(via_search, "f1") == nil
+    assert norm(via_search.bb) == norm(via_move.bb)
+  end
+
   test "apply_search matches Board.move on already-legal moves" do
     {_s, board} = Fen.load("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")
 

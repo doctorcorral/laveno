@@ -688,12 +688,21 @@ defmodule Laveno.Board.Utils do
 
   # King move masks are one square; castling must be injected separately
   # so the engine can play O-O / O-O-O in tournament games.
-  defp castle_moves(%{active_color: <<0::1>>} = board) do
-    Enum.filter(["e1g1", "e1c1"], &valid_move?(board, &1))
+  # Only emit the castle encodings when the rights bit is set. If rights
+  # are gone, `valid_move?("e1g1")` falls through to a rook/queen slide
+  # and would inject the opponent's piece as a "castle".
+  defp castle_moves(%{active_color: <<0::1>>, castles: <<k::1, q::1, _::2>>} = board) do
+    Enum.filter([{k, "e1g1"}, {q, "e1c1"}], fn {bit, mv} ->
+      bit == 1 and valid_move?(board, mv)
+    end)
+    |> Enum.map(&elem(&1, 1))
   end
 
-  defp castle_moves(%{active_color: <<1::1>>} = board) do
-    Enum.filter(["e8g8", "e8c8"], &valid_move?(board, &1))
+  defp castle_moves(%{active_color: <<1::1>>, castles: <<_::2, k::1, q::1>>} = board) do
+    Enum.filter([{k, "e8g8"}, {q, "e8c8"}], fn {bit, mv} ->
+      bit == 1 and valid_move?(board, mv)
+    end)
+    |> Enum.map(&elem(&1, 1))
   end
 
   def union_mask(%{bb: bb}, pieces) do
@@ -1050,36 +1059,59 @@ defmodule Laveno.Board.Utils do
 
   def apply_pseudo(board, move), do: apply_pseudo_bb(board, move)
 
-  defp apply_pseudo_bb(board, <<"e1g1">>) do
-    board.bb
-    |> clear_bit(:K, square_offset("e1"))
-    |> clear_bit(:R, square_offset("h1"))
-    |> set_bit(:K, square_offset("g1"))
-    |> set_bit(:R, square_offset("f1"))
+  # These four encodings are also ordinary rook/queen slides. Only castle
+  # when the king and rook are still on the home squares; otherwise the
+  # 4-byte path moves the piece that is actually on the from-square.
+  defp apply_pseudo_bb(board, <<"e1g1">> = move) do
+    if which_piece_bb(board.bb, square_offset("e1")) == :K and
+         which_piece_bb(board.bb, square_offset("h1")) == :R do
+      board.bb
+      |> clear_bit(:K, square_offset("e1"))
+      |> clear_bit(:R, square_offset("h1"))
+      |> set_bit(:K, square_offset("g1"))
+      |> set_bit(:R, square_offset("f1"))
+    else
+      apply_normal_bb(board, move)
+    end
   end
 
-  defp apply_pseudo_bb(board, <<"e1c1">>) do
-    board.bb
-    |> clear_bit(:K, square_offset("e1"))
-    |> clear_bit(:R, square_offset("a1"))
-    |> set_bit(:K, square_offset("c1"))
-    |> set_bit(:R, square_offset("d1"))
+  defp apply_pseudo_bb(board, <<"e1c1">> = move) do
+    if which_piece_bb(board.bb, square_offset("e1")) == :K and
+         which_piece_bb(board.bb, square_offset("a1")) == :R do
+      board.bb
+      |> clear_bit(:K, square_offset("e1"))
+      |> clear_bit(:R, square_offset("a1"))
+      |> set_bit(:K, square_offset("c1"))
+      |> set_bit(:R, square_offset("d1"))
+    else
+      apply_normal_bb(board, move)
+    end
   end
 
-  defp apply_pseudo_bb(board, <<"e8g8">>) do
-    board.bb
-    |> clear_bit(:k, square_offset("e8"))
-    |> clear_bit(:r, square_offset("h8"))
-    |> set_bit(:k, square_offset("g8"))
-    |> set_bit(:r, square_offset("f8"))
+  defp apply_pseudo_bb(board, <<"e8g8">> = move) do
+    if which_piece_bb(board.bb, square_offset("e8")) == :k and
+         which_piece_bb(board.bb, square_offset("h8")) == :r do
+      board.bb
+      |> clear_bit(:k, square_offset("e8"))
+      |> clear_bit(:r, square_offset("h8"))
+      |> set_bit(:k, square_offset("g8"))
+      |> set_bit(:r, square_offset("f8"))
+    else
+      apply_normal_bb(board, move)
+    end
   end
 
-  defp apply_pseudo_bb(board, <<"e8c8">>) do
-    board.bb
-    |> clear_bit(:k, square_offset("e8"))
-    |> clear_bit(:r, square_offset("a8"))
-    |> set_bit(:k, square_offset("c8"))
-    |> set_bit(:r, square_offset("d8"))
+  defp apply_pseudo_bb(board, <<"e8c8">> = move) do
+    if which_piece_bb(board.bb, square_offset("e8")) == :k and
+         which_piece_bb(board.bb, square_offset("a8")) == :r do
+      board.bb
+      |> clear_bit(:k, square_offset("e8"))
+      |> clear_bit(:r, square_offset("a8"))
+      |> set_bit(:k, square_offset("c8"))
+      |> set_bit(:r, square_offset("d8"))
+    else
+      apply_normal_bb(board, move)
+    end
   end
 
   defp apply_pseudo_bb(board, <<c1::8, r1::8, c2::8, r2::8, promo::8>>) do
@@ -1094,7 +1126,9 @@ defmodule Laveno.Board.Utils do
     |> set_bit(promo_piece, to)
   end
 
-  defp apply_pseudo_bb(board, <<c1::8, r1::8, c2::8, r2::8>>) do
+  defp apply_pseudo_bb(board, <<_::32>> = move), do: apply_normal_bb(board, move)
+
+  defp apply_normal_bb(board, <<c1::8, r1::8, c2::8, r2::8>>) do
     from = square_offset(<<c1, r1>>)
     to = square_offset(<<c2, r2>>)
     piece = which_piece_bb(board.bb, from)

@@ -202,7 +202,7 @@ defmodule Laveno.Board do
     to = <<c2, r2>>
     piece = Utils.which_piece?(board, from)
 
-    if piece == nil do
+    if piece == nil or not right_turn?(board, piece) do
       {:error, "invalid move"}
     else
       is_capture =
