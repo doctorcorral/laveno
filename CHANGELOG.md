@@ -1,3 +1,11 @@
+## 0.6.0 [2026-09-08]
+
+- [Enhancement] One attack pass shared by mobility, threats, and king safety.
+  Stand-pat scores stay identical; sliders are walked once per position.
+- [Enhancement] Pin-aware legal move generation.
+- [Bug Fix] `e1g1` / `e1c1` / `e8g8` / `e8c8` are rook slides when they
+  are not castles.
+
 ## 0.5.0 [2026-09-05]
 
 - [New Feature] Structure eval: mobility, pawn structure, rook files, and
