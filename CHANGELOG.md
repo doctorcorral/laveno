@@ -1,3 +1,8 @@
+## 0.7.0 [2026-09-08]
+
+- [Bug Fix] Search scores repetition, fifty-move (100 reversible plies),
+  and stalemate as draws instead of standing pat.
+
 ## 0.6.0 [2026-09-08]
 
 - [Enhancement] One attack pass shared by mobility, threats, and king safety.

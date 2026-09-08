@@ -45,6 +45,8 @@ defmodule Laveno.Fen do
       |> apply_en_passant(ep)
       |> Map.put(:halfmove_clock, rem(max(half, 0), 2))
       |> Map.put(:fullmove_number, max(full, 1))
+      |> Map.put(:fifty, max(half, 0))
+      |> Map.put(:hist, [])
 
     state = %{
       fen: String.trim(fen_string),
