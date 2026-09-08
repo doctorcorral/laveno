@@ -5,10 +5,10 @@ defmodule Laveno.Evaluation.Placement do
   Tables are stored a8-first (index 0 = a8, 63 = h1), matching the published PeSTO arrays.
   """
 
+  alias Laveno.Board.Attacks
   alias Laveno.Board.Utils
 
   @phase_max 24
-  @phase_piece %{N: 1, n: 1, B: 1, b: 1, R: 2, r: 2, Q: 4, q: 4}
 
   # PeSTO tables (https://www.chessprogramming.org/PeSTO%27s_Evaluation_Function)
   @mg_pawn {
@@ -154,12 +154,22 @@ defmodule Laveno.Evaluation.Placement do
   end
 
   def phase(board) do
-    phase =
-      Enum.reduce([:N, :n, :B, :b, :R, :r, :Q, :q], 0, fn piece, acc ->
-        acc + length(Utils.where_is(board, piece)) * @phase_piece[piece]
-      end)
+    bb = board.bb
 
-    min(phase, @phase_max)
+    n =
+      Attacks.popcount(bb[:N]) + Attacks.popcount(bb[:n]) + Attacks.popcount(bb[:B]) +
+        Attacks.popcount(bb[:b])
+
+    r = Attacks.popcount(bb[:R]) + Attacks.popcount(bb[:r])
+    q = Attacks.popcount(bb[:Q]) + Attacks.popcount(bb[:q])
+    min(n + 2 * r + 4 * q, @phase_max)
+  end
+
+  @doc "Middlegame / endgame piece-square term for `piece` on offset `off`."
+  def pst(piece, off) do
+    {color, mg_t, eg_t} = pst_tables(piece)
+    idx = table_index(off, color)
+    {elem(mg_t, idx), elem(eg_t, idx)}
   end
 
   def interpolate(mg, eg, phase) do
@@ -174,6 +184,19 @@ defmodule Laveno.Evaluation.Placement do
       end)
     end)
   end
+
+  defp pst_tables(:P), do: {:white, @mg_pawn, @eg_pawn}
+  defp pst_tables(:N), do: {:white, @mg_knight, @eg_knight}
+  defp pst_tables(:B), do: {:white, @mg_bishop, @eg_bishop}
+  defp pst_tables(:R), do: {:white, @mg_rook, @eg_rook}
+  defp pst_tables(:Q), do: {:white, @mg_queen, @eg_queen}
+  defp pst_tables(:K), do: {:white, @mg_king, @eg_king}
+  defp pst_tables(:p), do: {:black, @mg_pawn, @eg_pawn}
+  defp pst_tables(:n), do: {:black, @mg_knight, @eg_knight}
+  defp pst_tables(:b), do: {:black, @mg_bishop, @eg_bishop}
+  defp pst_tables(:r), do: {:black, @mg_rook, @eg_rook}
+  defp pst_tables(:q), do: {:black, @mg_queen, @eg_queen}
+  defp pst_tables(:k), do: {:black, @mg_king, @eg_king}
 
   defp table_index(off, :white) do
     file = rem(63 - off, 8)

@@ -16,18 +16,20 @@ defmodule Laveno.Evaluation.KingSafety do
   @b_rank7 {15, 14, 13, 12, 11, 10, 9, 8}
   @b_rank6 {23, 22, 21, 20, 19, 18, 17, 16}
 
-  def eval(board) do
-    phase = Placement.phase(board)
+  def eval(board), do: eval(board, nil)
+
+  def eval(board, ctx) do
+    phase = if ctx, do: ctx.phase, else: Placement.phase(board)
 
     if phase == 0 do
       0
     else
-      score = side(board, :white) - side(board, :black)
+      score = side(board, :white, ctx) - side(board, :black, ctx)
       Placement.interpolate(score, 0, phase)
     end
   end
 
-  defp side(board, color) do
+  defp side(board, color, ctx) do
     {king, pawns, by} =
       case color do
         :white -> {:K, :P, :black}
@@ -43,7 +45,7 @@ defmodule Laveno.Evaluation.KingSafety do
         pawn_bb = Attacks.as_int(board.bb[pawns])
         shield(color, file, pawn_bb) +
           open_files(color, file, pawn_bb) +
-          ring_pressure(board, sq, by) +
+          ring_pressure(board, sq, by, ctx) +
           uncastled(color, sq, board)
     end
   end
@@ -90,12 +92,21 @@ defmodule Laveno.Evaluation.KingSafety do
     file_has_pawn?(:white, file, pawn_bb)
   end
 
-  defp ring_pressure(board, sq, by) do
+  defp ring_pressure(board, sq, by, nil) do
     occ = Utils.occupancy_mask(board)
     ring = Attacks.king_attacks(sq) ||| 1 <<< sq
 
     Enum.reduce(Attacks.bits(ring), 0, fn dest, acc ->
       if Attacks.attacked?(board.bb, occ, dest, by), do: acc - 8, else: acc
+    end)
+  end
+
+  defp ring_pressure(_board, sq, by, ctx) do
+    att = if by == :black, do: ctx.b_att, else: ctx.w_att
+    ring = Attacks.king_attacks(sq) ||| 1 <<< sq
+
+    Enum.reduce(Attacks.bits(ring), 0, fn dest, acc ->
+      if (att &&& 1 <<< dest) != 0, do: acc - 8, else: acc
     end)
   end
 

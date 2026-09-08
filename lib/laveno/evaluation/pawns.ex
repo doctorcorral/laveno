@@ -91,10 +91,12 @@ defmodule Laveno.Evaluation.Pawns do
     %{files: files, adj: adj, connected: connected, w_front: w_front, b_front: b_front}
   )
 
-  def eval(board) do
+  def eval(board), do: eval(board, Placement.phase(board))
+
+  def eval(board, phase) do
     {w_mg, w_eg} = side(board, :white)
     {b_mg, b_eg} = side(board, :black)
-    Placement.interpolate(w_mg - b_mg, w_eg - b_eg, Placement.phase(board))
+    Placement.interpolate(w_mg - b_mg, w_eg - b_eg, phase)
   end
 
   defp side(board, color) do

@@ -5,9 +5,10 @@ It includes board representation, game state management and valid moves generati
 A finder is a game play brain to actually play a game.
 It has UCI support, which enables using a chess GUI to interact with the engine.
 
-**0.5.0** scores mobility, pawn structure, and hanging pieces, stores
+**0.6.0** scores mobility, pawn structure, and hanging pieces, stores
 transposition bounds correctly, reduces late quiet moves, generates the
-legal list once per search node, and removes the captured pawn on en passant.
+legal list once per search node, and shares one attack pass across
+mobility, threats, and king safety.
 
 Laveno exposes a handy API for each of it's components.
 
@@ -75,7 +76,7 @@ by adding `laveno` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:laveno, "~> 0.5.0"}
+    {:laveno, "~> 0.6.0"}
   ]
 end
 ```
