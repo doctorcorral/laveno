@@ -8,6 +8,8 @@ defmodule Laveno.Board do
             en_passant: nil,
             halfmove_clock: 0,
             fullmove_number: 0,
+            fifty: 0,
+            hist: [],
             game_over: false,
             moves: []
 
@@ -19,6 +21,8 @@ defmodule Laveno.Board do
           en_passant: nil | bitstring(),
           halfmove_clock: integer(),
           fullmove_number: integer(),
+          fifty: integer(),
+          hist: list(),
           game_over: bool(),
           moves: list(bitstring())
         }
@@ -68,6 +72,7 @@ defmodule Laveno.Board do
       |> increment_count()
       |> flip_active_color()
       |> log_move(move)
+      |> record_draw_state(board, :inc)
     else
       do_normal_move(board, move)
     end
@@ -85,6 +90,7 @@ defmodule Laveno.Board do
       |> increment_count()
       |> flip_active_color()
       |> log_move(move)
+      |> record_draw_state(board, :inc)
     else
       do_normal_move(board, move)
     end
@@ -102,6 +108,7 @@ defmodule Laveno.Board do
       |> increment_count()
       |> flip_active_color()
       |> log_move(move)
+      |> record_draw_state(board, :inc)
     else
       do_normal_move(board, move)
     end
@@ -119,6 +126,7 @@ defmodule Laveno.Board do
       |> increment_count()
       |> flip_active_color()
       |> log_move(move)
+      |> record_draw_state(board, :inc)
     else
       do_normal_move(board, move)
     end
@@ -153,6 +161,7 @@ defmodule Laveno.Board do
       |> reset_halfmove_clock()
       |> flip_active_color()
       |> log_move(move)
+      |> record_draw_state(board, :reset)
     else
       _ -> {:error, "invalid move"}
     end
@@ -188,6 +197,7 @@ defmodule Laveno.Board do
       |> (if is_pawn_move or is_capture, do: &reset_halfmove_clock/1, else: &increment_count/1).()
       |> flip_active_color()
       |> log_move(move)
+      |> record_draw_state(board, if(is_pawn_move or is_capture or is_ep, do: :reset, else: :inc))
     else
       _ -> {:error, "invalid move"}
     end
@@ -209,6 +219,8 @@ defmodule Laveno.Board do
         Utils.which_piece?(board, to) != nil or
           (piece in [:P, :p] and board.en_passant == to)
 
+      fifty_op = if piece in [:P, :p] or is_capture, do: :reset, else: :inc
+
       board
       |> update_castling_rights(piece, from, to)
       |> Map.put(:bb, Utils.apply_pseudo(board, move))
@@ -219,6 +231,7 @@ defmodule Laveno.Board do
           else: &increment_count/1
       )
       |> flip_active_color()
+      |> record_draw_state(board, fifty_op)
     end
   end
 
@@ -233,6 +246,24 @@ defmodule Laveno.Board do
       do: true
 
   def right_turn?(_, _), do: false
+
+  @doc "Zobrist-free repetition key: pieces, rights, side to move, and EP."
+  def rep_key(board) do
+    {board.bb, board.castles, board.active_color, board.en_passant}
+  end
+
+  @doc "Fifty-move (100 plies) or a position already seen on the path / game."
+  def draw?(board) do
+    Map.get(board, :fifty, 0) >= 100 or :lists.member(rep_key(board), Map.get(board, :hist, []))
+  end
+
+  defp record_draw_state(new, old, :reset) do
+    %{new | fifty: 0, hist: [rep_key(old) | Map.get(old, :hist, [])]}
+  end
+
+  defp record_draw_state(new, old, :inc) do
+    %{new | fifty: Map.get(old, :fifty, 0) + 1, hist: [rep_key(old) | Map.get(old, :hist, [])]}
+  end
 
   def increment_count(board = %{halfmove_clock: 0}) do
     %{board | halfmove_clock: 1}

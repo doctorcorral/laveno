@@ -60,8 +60,11 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
     moves = ordered_moves(board, depth)
 
     cond do
+      Board.draw?(board) ->
+        {0, board}
+
       moves == [] ->
-        quiesce(board, @neg_inf, @pos_inf)
+        terminal(board)
 
       true ->
         workers = max(1, min(threads, length(moves)))
@@ -130,31 +133,39 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
   defp negamax_tt(board, depth, alpha, beta) do
     SearchControl.inc_nodes()
 
-    if SearchControl.aborting?() do
-      {alpha, board}
-    else
-      ensure_table()
-      key = position_key(board)
+    cond do
+      SearchControl.aborting?() ->
+        {alpha, board}
 
-      case :ets.lookup(@table, key) do
-        [{^key, stored_depth, stored_eval, best_move, flag}] when stored_depth >= depth ->
-          cond do
-            flag == :exact ->
-              {stored_eval, apply_move(board, best_move)}
+      Board.draw?(board) ->
+        {0, board}
 
-            flag == :lower and stored_eval >= beta ->
-              {stored_eval, apply_move(board, best_move)}
+      true ->
+        ensure_table()
+        key = position_key(board)
+        probe_tt(board, depth, alpha, beta, key)
+    end
+  end
 
-            flag == :upper and stored_eval <= alpha ->
-              {stored_eval, apply_move(board, best_move)}
+  defp probe_tt(board, depth, alpha, beta, key) do
+    case :ets.lookup(@table, key) do
+      [{^key, stored_depth, stored_eval, best_move, flag}] when stored_depth >= depth ->
+        cond do
+          flag == :exact ->
+            {stored_eval, apply_move(board, best_move)}
 
-            true ->
-              negamax(board, depth, alpha, beta)
-          end
+          flag == :lower and stored_eval >= beta ->
+            {stored_eval, apply_move(board, best_move)}
 
-        _ ->
-          negamax(board, depth, alpha, beta)
-      end
+          flag == :upper and stored_eval <= alpha ->
+            {stored_eval, apply_move(board, best_move)}
+
+          true ->
+            negamax(board, depth, alpha, beta)
+        end
+
+      _ ->
+        negamax(board, depth, alpha, beta)
     end
   end
 
@@ -174,7 +185,7 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
           quiesce(board, alpha, beta)
         else
           case Utils.generate_moves(board) do
-            [] -> quiesce(board, alpha, beta)
+            [] -> terminal(board)
             legal -> search_moves(board, depth, alpha, beta, legal)
           end
         end
@@ -296,6 +307,10 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
 
   defp apply_move(board, _), do: board
 
+  defp terminal(board) do
+    if Utils.in_check?(board), do: {-10_000, board}, else: {0, board}
+  end
+
   defp quiesce(board, alpha, beta), do: quiesce(board, alpha, beta, 0)
 
   defp quiesce(board, alpha, beta, ply) do
@@ -304,6 +319,9 @@ defmodule Laveno.Finders.MinimaxABPruningNegamaxETS do
     cond do
       SearchControl.aborting?() ->
         {alpha, board}
+
+      Board.draw?(board) ->
+        {0, board}
 
       ply >= @qsearch_max_ply ->
         {stand_pat(board), board}
