@@ -12,7 +12,9 @@ defmodule Laveno.EvaluationTest do
   alias Laveno.Evaluation.Mobility
   alias Laveno.Evaluation.Pawns
   alias Laveno.Evaluation.Placement
+  alias Laveno.Evaluation.Features
   alias Laveno.Evaluation.Threats
+  alias Laveno.Evaluation.Weights
   alias Laveno.Fen
   alias Laveno.Finders.MinimaxABPruningNegamaxETS, as: Finder
 
@@ -82,6 +84,12 @@ defmodule Laveno.EvaluationTest do
     assert_in_delta Threats.eval(safe), 0, 25
   end
 
+  test "default weights keep the feature dot identical to the module sum" do
+    {_s, board} = Fen.load("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")
+    assert_in_delta Features.static(board, Weights.default()), oracle_static(board), 1.0e-9
+    assert Features.static(board, %{Weights.default() | n_dest_mg: 8}) != oracle_static(board)
+  end
+
   test "fused static matches the sum of the eval modules" do
     fens = [
       "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
@@ -93,21 +101,21 @@ defmodule Laveno.EvaluationTest do
 
     Enum.each(fens, fn fen ->
       {_s, board} = Fen.load(fen)
-      assert Evaluator.static(board) == oracle_static(board)
+      assert_in_delta Features.static(board, Weights.default()), oracle_static(board), 1.0e-9
     end)
   end
 
   test "fused static matches the oracle along a random legal walk" do
     board =
       Enum.reduce(1..80, Board.new(), fn _, board ->
-        assert Evaluator.static(board) == oracle_static(board)
+        assert_in_delta Features.static(board, Weights.default()), oracle_static(board), 1.0e-9
         case Utils.generate_moves(board) do
           [] -> board
           moves -> Board.move(board, Enum.random(moves))
         end
       end)
 
-    assert Evaluator.static(board) == oracle_static(board)
+    assert_in_delta Features.static(board, Weights.default()), oracle_static(board), 1.0e-9
   end
 
   test "shared attack maps match attacked?/4 on every square" do
@@ -124,6 +132,8 @@ defmodule Laveno.EvaluationTest do
 
   test "search does not give a queen for an undefended bishop" do
     {_s, board} = Fen.load("4k3/3b4/8/8/8/8/8/Q3K3 w - - 0 1")
+    Laveno.SearchControl.ensure()
+    Laveno.SearchControl.start_search(60_000)
     {_eval, result} = Finder.find(board, 3, -90, 90)
     refute List.last(result.moves) == "a1d7"
   end
@@ -132,4 +142,5 @@ defmodule Laveno.EvaluationTest do
     Material.eval(board) + Placement.eval(board) + KingSafety.eval(board) +
       Mobility.eval(board) + Pawns.eval(board) + Threats.eval(board)
   end
+
 end
