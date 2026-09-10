@@ -1,3 +1,10 @@
+## 0.8.0 [2026-09-10]
+
+- [Enhancement] Texel-tuned scales on the existing eval terms. Search
+  weights material 1.50, PeSTO 1.72, threats 0.70, king safety 0.62,
+  mobility 0.35, pawns 0.35. Default coefficients still match the
+  unweighted module sum. Two 800 ms books: 52.0/80 vs 50.0/80 control.
+
 ## 0.7.0 [2026-09-08]
 
 - [Bug Fix] Search scores repetition, fifty-move (100 reversible plies),

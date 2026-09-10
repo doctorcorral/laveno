@@ -94,34 +94,96 @@ defmodule Laveno.Evaluation.Pawns do
   def eval(board), do: eval(board, Placement.phase(board))
 
   def eval(board, phase) do
-    {w_mg, w_eg} = side(board, :white)
-    {b_mg, b_eg} = side(board, :black)
-    Placement.interpolate(w_mg - b_mg, w_eg - b_eg, phase)
+    c = counts(board)
+
+    mg =
+      c.isolated * @isolated_mg + c.doubled * @doubled_mg + c.connected * @connected_mg +
+        c.passed_1 * elem(@passed_mg, 1) + c.passed_2 * elem(@passed_mg, 2) +
+        c.passed_3 * elem(@passed_mg, 3) + c.passed_4 * elem(@passed_mg, 4) +
+        c.passed_5 * elem(@passed_mg, 5) + c.passed_6 * elem(@passed_mg, 6) +
+        c.open_file * @open_file_mg + c.semi_open * @semi_open_mg
+
+    eg =
+      c.isolated * @isolated_eg + c.doubled * @doubled_eg + c.connected * @connected_eg +
+        c.passed_1 * elem(@passed_eg, 1) + c.passed_2 * elem(@passed_eg, 2) +
+        c.passed_3 * elem(@passed_eg, 3) + c.passed_4 * elem(@passed_eg, 4) +
+        c.passed_5 * elem(@passed_eg, 5) + c.passed_6 * elem(@passed_eg, 6) +
+        c.open_file * @open_file_eg + c.semi_open * @semi_open_eg
+
+    Placement.interpolate(mg, eg, phase)
   end
 
-  defp side(board, color) do
+  def counts(board) do
+    merge(side_counts(board, :white), side_counts(board, :black))
+  end
+
+  defp merge(w, b) do
+    Map.merge(w, b, fn _k, wv, bv -> wv - bv end)
+  end
+
+  defp side_counts(board, color) do
     {ours_p, theirs_p, rook} = pieces(color)
     ours = Attacks.as_int(board.bb[ours_p])
     theirs = Attacks.as_int(board.bb[theirs_p])
     front = if color == :white, do: @masks.w_front, else: @masks.b_front
 
-    {mg, eg} = doubled(ours)
+    acc = %{
+      isolated: 0,
+      doubled: doubled_extra(ours),
+      connected: 0,
+      passed_1: 0,
+      passed_2: 0,
+      passed_3: 0,
+      passed_4: 0,
+      passed_5: 0,
+      passed_6: 0,
+      open_file: 0,
+      semi_open: 0
+    }
 
-    {mg, eg} =
-      Enum.reduce(Attacks.bits(ours), {mg, eg}, fn sq, {m, e} ->
+    acc =
+      Enum.reduce(Attacks.bits(ours), acc, fn sq, acc ->
         f = rem(63 - sq, 8)
         rel = relative_rank(sq, color)
-        isolated? = (ours &&& elem(@masks.adj, f)) == 0
-        passed? = (theirs &&& elem(front, sq)) == 0
-        connected? = (ours &&& elem(@masks.connected, sq)) != 0
+        acc = if (ours &&& elem(@masks.adj, f)) == 0, do: %{acc | isolated: acc.isolated + 1}, else: acc
+        acc = if (ours &&& elem(@masks.connected, sq)) != 0, do: %{acc | connected: acc.connected + 1}, else: acc
 
-        {m, e}
-        |> add_if(isolated?, @isolated_mg, @isolated_eg)
-        |> add_if(connected?, @connected_mg, @connected_eg)
-        |> add_if(passed?, elem(@passed_mg, rel), elem(@passed_eg, rel))
+        if (theirs &&& elem(front, sq)) == 0 do
+          add_passed(acc, rel)
+        else
+          acc
+        end
       end)
 
-    rook_files(Utils.where_is(board, rook), ours, theirs, {mg, eg})
+    rook_file_counts(Utils.where_is(board, rook), ours, theirs, acc)
+  end
+
+  defp add_passed(acc, 1), do: %{acc | passed_1: acc.passed_1 + 1}
+  defp add_passed(acc, 2), do: %{acc | passed_2: acc.passed_2 + 1}
+  defp add_passed(acc, 3), do: %{acc | passed_3: acc.passed_3 + 1}
+  defp add_passed(acc, 4), do: %{acc | passed_4: acc.passed_4 + 1}
+  defp add_passed(acc, 5), do: %{acc | passed_5: acc.passed_5 + 1}
+  defp add_passed(acc, 6), do: %{acc | passed_6: acc.passed_6 + 1}
+  defp add_passed(acc, _), do: acc
+
+  defp doubled_extra(ours) do
+    Enum.reduce(0..7, 0, fn f, acc ->
+      acc + max(Attacks.popcount(ours &&& elem(@masks.files, f)) - 1, 0)
+    end)
+  end
+
+  defp rook_file_counts(squares, ours, theirs, acc) do
+    all = ours ||| theirs
+
+    Enum.reduce(squares, acc, fn sq, acc ->
+      file = elem(@masks.files, rem(63 - sq, 8))
+
+      cond do
+        (all &&& file) == 0 -> %{acc | open_file: acc.open_file + 1}
+        (ours &&& file) == 0 -> %{acc | semi_open: acc.semi_open + 1}
+        true -> acc
+      end
+    end)
   end
 
   defp pieces(:white), do: {:P, :p, :R}
@@ -130,27 +192,4 @@ defmodule Laveno.Evaluation.Pawns do
   defp relative_rank(sq, :white), do: div(63 - sq, 8)
   defp relative_rank(sq, :black), do: 7 - div(63 - sq, 8)
 
-  defp doubled(ours) do
-    Enum.reduce(0..7, {0, 0}, fn f, {m, e} ->
-      extra = max(Attacks.popcount(ours &&& elem(@masks.files, f)) - 1, 0)
-      {m + extra * @doubled_mg, e + extra * @doubled_eg}
-    end)
-  end
-
-  defp rook_files(squares, ours, theirs, score) do
-    all = ours ||| theirs
-
-    Enum.reduce(squares, score, fn sq, {m, e} ->
-      file = elem(@masks.files, rem(63 - sq, 8))
-
-      cond do
-        (all &&& file) == 0 -> {m + @open_file_mg, e + @open_file_eg}
-        (ours &&& file) == 0 -> {m + @semi_open_mg, e + @semi_open_eg}
-        true -> {m, e}
-      end
-    end)
-  end
-
-  defp add_if({m, e}, true, dmg, deg), do: {m + dmg, e + deg}
-  defp add_if(score, false, _, _), do: score
 end

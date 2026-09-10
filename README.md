@@ -5,11 +5,11 @@ It includes board representation, game state management and valid moves generati
 A finder is a game play brain to actually play a game.
 It has UCI support, which enables using a chess GUI to interact with the engine.
 
-**0.7.0** scores mobility, pawn structure, and hanging pieces, stores
-transposition bounds correctly, reduces late quiet moves, generates the
-legal list once per search node, shares one attack pass across mobility,
-threats, and king safety, and scores repetition, fifty-move, and
-stalemate as draws.
+**0.8.0** Texel-tunes the six eval terms (more material and PeSTO, less
+mobility and pawn structure) so search uses the mix that held 52.0/80
+at 800 ms. Default weights stay score-identical to the unweighted
+module sum. Also scores mobility, pawn structure, hanging pieces,
+repetition, fifty-move, and stalemate as before.
 
 Laveno exposes a handy API for each of it's components.
 
@@ -77,7 +77,7 @@ by adding `laveno` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:laveno, "~> 0.7.0"}
+    {:laveno, "~> 0.8.0"}
   ]
 end
 ```
